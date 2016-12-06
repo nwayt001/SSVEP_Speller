@@ -16,7 +16,7 @@ options.src_parallel_mode=false;
 % Set Speller Parameters
 options.CUE_DUR = 1;
 options.FB_DUR = 1;
-options.stimDuration = 6;
+options.stimDuration = 2;
 options.numTarg = 3;
 options.copySeq = 'ABC';
 options.sourceType = 'LSL';

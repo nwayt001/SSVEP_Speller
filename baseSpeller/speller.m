@@ -261,7 +261,7 @@ classdef speller < handle
         
         % this snippit runs a passive viewing
         function run_passive_viewing(self)
-            
+            % not yet implemented
         end
         
         %this function runs the ny times article sequence
@@ -306,7 +306,7 @@ classdef speller < handle
         
         % this code snippet runs a copy spell run
         function run_copyspell_trial(self,word2spell)
-            self.spellerMode = 'copyspell';
+            self.spellerMode = 'copyspell2';
             % spell until word is completely spelled
             self.TRIAL_CNT=1;
             self.COPY_SEQ = word2spell;
@@ -441,6 +441,12 @@ classdef speller < handle
                 
                 % return fb and cue stim to normal for stimulation
                 exp_visualFeedback(self,self.blankScreen, self.design, cue, self.BLACK, self.WHITE, self.WHITE, self.fb_seq, self.copy_seq);
+            elseif(strcmpi(self.spellerMode,'copyspell2'))
+                self.copy_seq = self.COPY_SEQ;
+                exp_visualFeedback(self,self.blankScreen, self.design, 1, self.BLACK, self.WHITE, self.WHITE, self.fb_seq, self.copy_seq);
+                Screen('CopyWindow', self.blankScreen, self.window);
+                Screen('Flip', self.window);
+                
             elseif(strcmpi(self.spellerMode,'articlespell'))
                 exp_visualFeedback(self,self.blankScreen, self.design, 1, self.BLACK, self.WHITE, self.WHITE, self.fb_seq, self.copy_seq);
                 Screen('CopyWindow', self.blankScreen, self.window);

@@ -25,7 +25,7 @@ classdef LSL < Signal_IO
             lsl.debugMode = debugMode;
             
             % load LSL library
-            lsl.lib = lsl_loadlib();
+            lsl.lib = lsl_loadlib(); 
             
             % initialize lsl marker stream
             lsl.info = lsl_streaminfo(lsl.lib,'SSVEP-Markers','Markers',1,0,'cf_string','SSVEP-Speller');
@@ -63,7 +63,7 @@ classdef LSL < Signal_IO
             % new and improved
             if(~obj.debugMode)
                     [tmp_data, timestamps] = obj.EEG_inlet.pull_chunk();
-                    data = tmp_data(:,timestamps>=obj.trialStart_ts & timestamps<=obj.trialStop_ts);
+                    data = tmp_data(obj.channels,timestamps>=obj.trialStart_ts & timestamps<=obj.trialStop_ts);
                     obj.waitingOnData=false;
             else
                 data=[];

@@ -57,13 +57,14 @@ classdef speller < handle
         wordPredictionMode
         twitterMode
         TTS_Mode
-        offlineMode
+        showFeedback
         
         % PTB Screens
         offScreen
         blankScreen
         startScreen
         endScreen
+        articleScreen
         
         % Class objects
         sourceObj
@@ -71,6 +72,10 @@ classdef speller < handle
         wordPredictorObj
         twitterObj
         TTS_Obj
+        
+        % speller article task
+        standard_words
+        article_database
     end
     
     methods
@@ -96,238 +101,24 @@ classdef speller < handle
             self.src_parallel_mode = options.src_parallel_mode;
             self.sub_info = options.sub_info;
             self.data_dir = options.data_dir;
-            self.offlineMode = options.offlineMode;
-            if(self.offlineMode)
+            self.showFeedback = options.showFeedback;
+            if(self.showFeedback)
                 self.spellerMode = 'copyspell';
                 self.debugMode = true;
                 self.wordPredictionMode = false;
             end
             Priority(1); % set to high priority
-            initialize(self); % initialize speller display
+            initialize(self); % initialize speller display 
+            Screen('Preference', 'SkipSyncTests', 1);
+            
+            % speller article task
+            self.standard_words = options.standard_words;
+            self.article_database = options.article_database;
         end
         %------------------------------------------------------------------
         
         %------------------------------------------------------------------
         % Main Functions:
-        
-        function start(self)
-        %START is the main runnable that starts and runs the speller after
-        %all initialization has been completed
-
-            % Show start screen and wait for user to Start
-            if(self.showStart)
-                Screen('CopyWindow', self.startScreen, self.window);
-                Screen('Flip', self.window);
-                while 1
-                    [~, ~, keyCode] = KbCheck([],[],self.keypress_check_vector);
-                    if keyCode(self.enterKey) || keyCode(self.tKey)
-                        break;
-                    end
-                end
-            end
-            
-            self.running=true;
-            while self.running
-                % check to see if experiment is done
-                if(self.TRIAL_CNT==self.EXP_END+1)
-                    while 1
-                        [~, ~, keyCode] = KbCheck([],[],self.keypress_check_vector);
-                        if keyCode(self.escKey)
-                            break;
-                        end
-                        % Show end screen
-                        Screen('CopyWindow', self.endScreen, self.window);
-                        Screen('Flip', self.window);
-                    end
-                    break;
-                end
-                 [~, ~, keyCode] = KbCheck([],[],self.keypress_check_vector);
-                 if keyCode(self.escKey), break; end
-                 
-                 displayCue(self);                    % CUE
-                 stimulate(self);                     % Stimulation
-                 displayFeedback(self);               % Feedback
-            end
-            terminate(self); % terminate speller when done
-        end
-        
-        function preDrawStimuli(self)
-        % PREDRAWSTIMULI Pre-Draws stimulus sequence in off-screens in the background
-            for win_i = 1:1:self.design.LenCode
-                Screen('FillRect', self.offScreen(win_i), self.WHITE, self.design.TxtFldLoc);
-                
-                if(strcmpi(self.spellerMode,'copyspell'))
-                    Screen('DrawText', self.offScreen(win_i), ['>>' self.fb_seq], self.design.TxtLocX, self.design.TxtLocY+diff(self.design.TxtFldLoc([2,4]))/4, self.BLACK);
-                    Screen('DrawText', self.offScreen(win_i), ['>>' self.copy_seq], self.design.TxtLocX, self.design.TxtLocY-diff(self.design.TxtFldLoc([2,4]))/4, self.BLACK);
-                else
-                    Screen('DrawText', self.offScreen(win_i), ['>>' self.fb_seq], self.design.TxtLocX, self.design.TxtLocY, [0, 0, 0]); 
-                end
-                
-                if(self.wordPredictionMode)
-                    fillColor = cell2mat(self.design.FlickCode');
-                    stimParam = struct(...
-                        'FillColor',    fillColor(:, win_i),...
-                        'FrameColor',   fillColor(:, win_i),...
-                        'TextColor',    self.BLACK,...
-                        'TextFont',     self.TEXT_FONT,...
-                        'TextSize',     self.FONT_SIZE);
-                    exp_preloadStimuli(self,'stimuli', self.offScreen(win_i), self.design, stimParam)
-                end
-            end % win_i
-        end
-        
-        function stimulate(self)
-        % STIMULATE starts the actual ssvep stimulation sequence. this is a
-        % synchronous and discrete speller, therefore, the stimulation
-        % turns on and off for a fixed interval, afterwards, classification
-        % and feedback can be performed
-            self.vbl = Screen('Flip', self.window);
-            if(strcmp(self.sourceType,'LSL'))
-                if(strcmp(self.spellerMode,'copyspell'))
-                    sendStartMarker(self.sourceObj, ['trial_start_#' int2str(self.TRIAL_CNT-1) '_char_'...
-                        self.COPY_SEQ(self.TRIAL_CNT-1) '_freq_' num2str(self.design.StimFreq{self.Copy_Seq_Num(self.TRIAL_CNT-1)})]);
-                else                    
-                    sendStartMarker(self.sourceObj, 'trial_start');
-                end
-            else
-                sendTrigger(self.sourceObj,'start'); % trigger start of stimulation
-            end
-            % Start Gazing (Stimulation) ------------------------------------
-            for win_i = 1:1:self.design.LenCode
-                % If 'ESC' key is pressed, the iteration will be finished.
-                [~, ~, keyCode] = KbCheck([],[],self.keypress_check_vector);
-                if keyCode(self.escKey), break; end
-                % Stimulation
-                Screen('CopyWindow', self.offScreen(win_i), self.window);
-                self.vbl = Screen('Flip', self.window, self.vbl + (0.5*self.ifi));
-                
-                if(strcmp(self.classifierType,'Mouse'))
-                    % decode selected target from mouse click
-                    decode_mouse_target(self.classifierObj)
-                end
-            end % win_i
-            if(strcmp(self.sourceType,'LSL'))
-                if(strcmp(self.spellerMode,'copyspell'))
-                    sendStopMarker(self.sourceObj, ['trial_stop_#' int2str(self.TRIAL_CNT-1) '_char_'...
-                        self.COPY_SEQ(self.TRIAL_CNT-1) '_freq_' num2str(self.design.StimFreq{self.Copy_Seq_Num(self.TRIAL_CNT-1)})]);
-                else
-                    sendStopMarker(self.sourceObj, 'trial_stop');
-                end
-            else
-                sendTrigger(self.sourceObj,'stop');   % trigger end of stimulation
-            end
-            Screen('CopyWindow', self.blankScreen, self.window); 
-            Screen('Flip', self.window); % return to blank screen after stimulation
-        end
-        
-        function displayCue(self)
-        % DISPLAYCUE displays the cue to the next letter to spell to the
-        % user. This is usually used in copy-speller mode
-            trialStart = tic;  % Timer for begining of trial
-            
-            if(strcmpi(self.spellerMode,'copyspell'))
-                % Cue Letter to Spell (Copy Spelling Mode)
-                Txt2Spell = self.COPY_SEQ(self.TRIAL_CNT);
-                self.copy_seq = [self.COPY_SEQ '  (' Txt2Spell ')' ];
-                cue = self.Copy_Seq_Num(self.TRIAL_CNT);
-                
-                % Display Cue to user
-                exp_visualFeedback(self,self.blankScreen, self.design, cue, self.BLUE, self.BLUE, self.WHITE, self.fb_seq,self.copy_seq);
-                Screen('CopyWindow', self.blankScreen, self.window);
-                Screen('Flip', self.window);
-                
-                % return fb and cue stim to normal for stimulation
-                exp_visualFeedback(self,self.blankScreen, self.design, cue, self.BLACK, self.WHITE, self.WHITE, self.fb_seq, self.copy_seq);
-                
-                self.TRIAL_CNT = self.TRIAL_CNT + 1; % update counter
-            else
-                % Update Word Prediction
-                if(self.wordPredictionMode)
-                    if(~isempty(self.fb_seq))
-                        wp = strsplit(self.fb_seq);
-                        self.predictiveText = PredictWords(self.wordPredictorObj,wp{end});
-                    else 
-                        self.predictiveText = PredictWords(self.wordPredictorObj,[]);
-                    end
-                    % update the first 9 stimuli of blank screen with new
-                    % predictive text
-                    for i = 1:self.wordPredictorObj.numWords2Predict
-                        self.design.Symbol{i} = [' ' upper(self.predictiveText{i}) ' '];
-                        self.design.NameAudio{i} = self.predictiveText{i};
-                        Screen(self.blankScreen, 'TextSize', self.SM_FONT_SIZE);
-                        exp_visualFeedback(self, self.blankScreen, self.design, i, self.BLACK, self.YELLOW, self.YELLOW, self.fb_seq,[]);
-                    end
-                        Screen(self.blankScreen, 'TextSize', self.FONT_SIZE);
-                end
-                Screen('CopyWindow', self.blankScreen, self.window);
-                Screen('Flip', self.window);
-            end
-
-            preDrawStimuli(self);  % pre-draw
-            while toc(trialStart) <= self.CUE_DUR
-                [~, ~, keyCode] = KbCheck([],[],self.keypress_check_vector);
-                if keyCode(self.escKey), break; end
-            end
-        end
-        
-        function displayFeedback(self)
-        % DISPLAYFEEDBACK performs all opterations necessary to generate
-        % feedback for an SSVEP speller, including extracting a stimulus
-        % time-locked EEG trial, classifiying the EEG trial, and displaying
-        % the feedback to the user.
-            if(~self.offlineMode)
-                % Determine feedback
-                trial = readBuffer(self.sourceObj); % extract EEG trial from source
-                fb = classifyTrial(self.classifierObj,trial); % classify trial
-                self.spelledLetters = [self.spelledLetters fb]; % save spelled leters
-                self.spelledTxt = [self.spelledTxt self.design.fbSymbol{fb}];
-
-                % Dispaly feedback to user
-                if(self.twitterMode && fb == self.twitterObj.twitterTarg)
-                    sendTweet(self.twitterObj,self.fb_seq);
-                    show_twitter(self.twitterObj);
-                    self.TRIAL_CNT=self.EXP_END+1;
-                else
-                    if(strcmp(self.design.Symbol{fb},'<'))
-                        self.fb_seq = self.fb_seq(1:end-1);
-                    else
-                        self.fb_seq = [self.fb_seq, self.design.fbSymbol{fb}];
-                    end
-                end
-
-                % Re-Draw Screen with new feedback
-                if(self.wordPredictionMode && fb <=9)
-                    Screen(self.blankScreen, 'TextSize', self.SM_FONT_SIZE);
-                else
-                    Screen(self.blankScreen, 'TextSize', self.FONT_SIZE);
-                end
-                exp_visualFeedback(self, self.blankScreen, self.design, fb, self.RED, self.RED, self.BLACK, self.fb_seq,self.copy_seq);
-                Screen('CopyWindow', self.blankScreen, self.window);
-                Screen('Flip', self.window);
-
-                if(self.TTS_Mode)
-                    play_text(self.TTS_Obj,fb);
-                end
-
-                % Reset screen after display
-                if(self.wordPredictionMode && fb <=9)
-                    Screen(self.blankScreen, 'TextSize', self.SM_FONT_SIZE);
-                end
-                exp_visualFeedback(self, self.blankScreen, self.design, fb, self.BLACK, self.WHITE, self.WHITE, self.fb_seq,self.copy_seq);
-                Screen(self.blankScreen, 'TextSize', self.FONT_SIZE);
-            end
-            inter_trialStart = tic;
-            while toc(inter_trialStart) <= self.FB_DUR
-                [~, ~, keyCode] = KbCheck([],[],self.keypress_check_vector);
-                if keyCode(self.escKey), break; end
-            end
-        end
-                
-        %------------------------------------------------------------------
-        
-        
-        %------------------------------------------------------------------
-        % Dependencies:
         function initialize(self)
         % INITIALIZE starts up the PTB windows, speller screens and other
         % modules used to run the BCI speller
@@ -376,27 +167,34 @@ classdef speller < handle
                     self.classifierObj = Mouse_Classifier(self.window,self.design.StimLoc);
             end
             
+            % load ny times articles
+            [~,~,raw] = xlsread(self.article_database);
+            
         end % END initialze
         
         function terminate(self)
         % TERMINATE closes all PTB windows and terminates any objects
-            % save results
-            if(~self.offlineMode)
-                COPY_SEQ = self.COPY_SEQ;
-                spelledLetters = self.spelledLetters;
-                spellerMode = self.spellerMode;
-                twitterMode = self.twitterMode;
-                wordPredictionMode = self.wordPredictionMode;
-                classifierType = self.classifierType;
-                sourceType = self.sourceType;
-                spelledTxt = self.spelledTxt;
-                save([self.data_dir 'S' self.sub_info.sub_id 'S' self.sub_info.session_id...
-                    'R' self.sub_info.run_id],'spelledLetters', 'COPY_SEQ','spellerMode','twitterMode',...
-                    'wordPredictionMode','classifierType','sourceType','spelledTxt');
-            end
             Screen('CloseAll');
             ShowCursor;
-            Screen('Preference', 'VisualDebuglevel', self.oldDebugLevel);
+            Screen('Preference', 'VisualDebuglevel', 1);    
+            % save results
+            try
+                if(self.showFeedback)
+                    COPY_SEQ = self.COPY_SEQ;
+                    spelledLetters = self.spelledLetters;
+                    spellerMode = self.spellerMode;
+                    twitterMode = self.twitterMode;
+                    wordPredictionMode = self.wordPredictionMode;
+                    classifierType = self.classifierType;
+                    sourceType = self.sourceType;
+                    spelledTxt = self.spelledTxt;
+                    save([self.data_dir 'S' self.sub_info.sub_id 'S' self.sub_info.session_id...
+                        'R' self.sub_info.run_id],'spelledLetters', 'COPY_SEQ','spellerMode','twitterMode',...
+                        'wordPredictionMode','classifierType','sourceType','spelledTxt');
+                end
+            catch
+            end
+            
             try
                 terminate(self.sourceObj);
             catch
@@ -407,6 +205,266 @@ classdef speller < handle
             Priority(0);
             
         end % END terminate
+        
+        function start(self)
+        %START is the main runnable that starts and runs the speller after
+        %all initialization has been completed 
+        
+            % Show start screen and wait for user to Start
+            if(self.showStart)
+                Screen('CopyWindow', self.articleScreen, self.window);
+                Screen('Flip', self.window);
+                while 1
+                    [~, ~, keyCode] = KbCheck([],[],self.keypress_check_vector);
+                    if keyCode(self.enterKey) || keyCode(self.tKey)
+                        terminate(self);
+                        break;
+                    end
+                end
+            end
+            
+             % STANDARD WORDS
+            for word=1:length(self.standard_words)
+                run_copyspell_trial(self, self.standard_words{word});
+            end
+            
+            % NY TIMES
+            for article = 1:8
+                run_article_sequence(self);
+            end
+            
+            
+            % STANDARD WORDS
+            for word=1:length(self.standard_words)
+                run_copyspell_trial(self, self.standard_words{word});
+            end
+            
+            
+            % experiemnt complete, terminate
+            terminate(self); % terminate speller when done
+        end
+        
+        function run_article_sequence(self)
+        end
+        
+        % this code snippet runs a copy spell run
+        function run_copyspell_trial(self,word2spell)            
+                % spell until word is completely spelled
+                self.TRIAL_CNT=1;
+                self.COPY_SEQ = word2spell;
+                self.fb_seq = [];
+                % translate txt 2 spell 2 number array
+                for xx = 1:length(self.COPY_SEQ)
+                    for jj = 1:length(self.design.Symbol)
+                        if(strcmp(self.design.Symbol{jj},self.COPY_SEQ(xx)))
+                            self.Copy_Seq_Num(xx) = jj;
+                        end
+                    end
+                end
+
+                while(self.TRIAL_CNT <=length(word2spell))
+                    
+                    % add in manual pause
+                    while 1
+                        [~, ~, keyCode] = KbCheck([],[],self.keypress_check_vector);
+                        if keyCode(self.escKey)
+                            self.TRIAL_CNT=100;
+                            terminate(self);
+                            break;
+                        end
+                        if keyCode(self.enterKey) || keyCode(self.tKey)
+                            break;
+                        end
+                    end
+                  
+                    % Standard cue-stim-fb sequence
+                    displayCue(self);                    % CUE
+                    stimulate(self);                     % Stimulation
+                    displayFeedback(self);               % Feedback 
+                    
+                    % update trial counter
+                    self.TRIAL_CNT = self.TRIAL_CNT + 1;
+                end
+        end
+        
+        
+        % Drawing Functions
+        function preDrawStimuli(self)
+        % PREDRAWSTIMULI Pre-Draws stimulus sequence in off-screens in the background
+            for win_i = 1:1:self.design.LenCode
+                Screen('FillRect', self.offScreen(win_i), self.WHITE, self.design.TxtFldLoc);
+                
+                if(strcmpi(self.spellerMode,'copyspell'))
+                    Screen('DrawText', self.offScreen(win_i), ['>>' self.fb_seq], self.design.TxtLocX, self.design.TxtLocY+diff(self.design.TxtFldLoc([2,4]))/4, self.BLACK);
+                    Screen('DrawText', self.offScreen(win_i), ['>>' self.copy_seq], self.design.TxtLocX, self.design.TxtLocY-diff(self.design.TxtFldLoc([2,4]))/4, self.BLACK);
+                else
+                    Screen('DrawText', self.offScreen(win_i), ['>>' self.fb_seq], self.design.TxtLocX, self.design.TxtLocY, [0, 0, 0]); 
+                end
+                
+                if(self.wordPredictionMode)
+                    fillColor = cell2mat(self.design.FlickCode');
+                    stimParam = struct(...
+                        'FillColor',    fillColor(:, win_i),...
+                        'FrameColor',   fillColor(:, win_i),...
+                        'TextColor',    self.BLACK,...
+                        'TextFont',     self.TEXT_FONT,...
+                        'TextSize',     self.FONT_SIZE);
+                    exp_preloadStimuli(self,'stimuli', self.offScreen(win_i), self.design, stimParam)
+                end
+            end % win_i
+        end
+        
+        function stimulate(self)
+        % STIMULATE starts the actual ssvep stimulation sequence. this is a
+        % synchronous and discrete speller, therefore, the stimulation
+        % turns on and off for a fixed interval, afterwards, classification
+        % and feedback can be performed
+            self.vbl = Screen('Flip', self.window);
+            if(strcmp(self.sourceType,'LSL'))
+                if(strcmp(self.spellerMode,'copyspell'))
+                    sendStartMarker(self.sourceObj, ['trial_start_#' int2str(self.TRIAL_CNT-1) '_char_'...
+                        self.COPY_SEQ(self.TRIAL_CNT-1) '_freq_' num2str(self.design.StimFreq{self.Copy_Seq_Num(self.TRIAL_CNT-1)})]);
+                else                    
+                    sendStartMarker(self.sourceObj, 'trial_start');
+                end
+            else
+                sendTrigger(self.sourceObj,'start'); % trigger start of stimulation
+            end
+            
+            % Start Gazing (Stimulation) ------------------------------------
+            for win_i = 1:1:self.design.LenCode
+                % If 'ESC' key is pressed, the iteration will be finished.
+                [~, ~, keyCode] = KbCheck([],[],self.keypress_check_vector);
+                if keyCode(self.escKey), break; end
+                % Stimulation
+                Screen('CopyWindow', self.offScreen(win_i), self.window);
+                self.vbl = Screen('Flip', self.window, self.vbl + (0.5*self.ifi));
+                
+                if(strcmp(self.classifierType,'Mouse'))
+                    % decode selected target from mouse click
+                    decode_mouse_target(self.classifierObj)
+                end
+            end % win_i
+
+            if(strcmp(self.sourceType,'LSL'))
+                if(strcmp(self.spellerMode,'copyspell'))
+                    sendStopMarker(self.sourceObj, ['trial_stop_#' int2str(self.TRIAL_CNT-1) '_char_'...
+                        self.COPY_SEQ(self.TRIAL_CNT-1) '_freq_' num2str(self.design.StimFreq{self.Copy_Seq_Num(self.TRIAL_CNT-1)})]);
+                else
+                    sendStopMarker(self.sourceObj, 'trial_stop');
+                end
+            else
+                sendTrigger(self.sourceObj,'stop');   % trigger end of stimulation
+            end
+            Screen('CopyWindow', self.blankScreen, self.window); 
+            Screen('Flip', self.window); % return to blank screen after stimulation
+        end
+        
+        function displayCue(self)
+        % DISPLAYCUE displays the cue to the next letter to spell to the
+        % user. This is usually used in copy-speller mode
+            trialStart = tic;  % Timer for begining of trial
+            
+            if(strcmpi(self.spellerMode,'copyspell'))
+                % Cue Letter to Spell (Copy Spelling Mode)
+                Txt2Spell = self.COPY_SEQ(self.TRIAL_CNT);
+                self.copy_seq = [self.COPY_SEQ '  (' Txt2Spell ')' ];
+                cue = self.Copy_Seq_Num(self.TRIAL_CNT);
+                
+                % Display Cue to user
+                exp_visualFeedback(self,self.blankScreen, self.design, cue, self.BLUE, self.BLUE, self.WHITE, self.fb_seq,self.copy_seq);
+                Screen('CopyWindow', self.blankScreen, self.window);
+                Screen('Flip', self.window);
+                
+                % return fb and cue stim to normal for stimulation
+                exp_visualFeedback(self,self.blankScreen, self.design, cue, self.BLACK, self.WHITE, self.WHITE, self.fb_seq, self.copy_seq);
+            else
+                % Update Word Prediction
+                if(self.wordPredictionMode)
+                    if(~isempty(self.fb_seq))
+                        wp = strsplit(self.fb_seq);
+                        self.predictiveText = PredictWords(self.wordPredictorObj,wp{end});
+                    else 
+                        self.predictiveText = PredictWords(self.wordPredictorObj,[]);
+                    end
+                    % update the first 9 stimuli of blank screen with new
+                    % predictive text
+                    for i = 1:self.wordPredictorObj.numWords2Predict
+                        self.design.Symbol{i} = [' ' upper(self.predictiveText{i}) ' '];
+                        self.design.NameAudio{i} = self.predictiveText{i};
+                        Screen(self.blankScreen, 'TextSize', self.SM_FONT_SIZE);
+                        exp_visualFeedback(self, self.blankScreen, self.design, i, self.BLACK, self.YELLOW, self.YELLOW, self.fb_seq,[]);
+                    end
+                        Screen(self.blankScreen, 'TextSize', self.FONT_SIZE);
+                end
+                Screen('CopyWindow', self.blankScreen, self.window);
+                Screen('Flip', self.window);
+            end
+
+            preDrawStimuli(self);  % pre-draw
+            while toc(trialStart) <= self.CUE_DUR
+                [~, ~, keyCode] = KbCheck([],[],self.keypress_check_vector);
+                if keyCode(self.escKey), break; end
+            end
+        end
+        
+        function displayFeedback(self)
+        % DISPLAYFEEDBACK performs all opterations necessary to generate
+        % feedback for an SSVEP speller, including extracting a stimulus
+        % time-locked EEG trial, classifiying the EEG trial, and displaying
+        % the feedback to the user.
+            if(self.showFeedback)
+                % Determine feedback
+                trial = readBuffer(self.sourceObj); % extract EEG trial from source
+                fb = classifyTrial(self.classifierObj,trial); % classify trial
+                self.spelledLetters = [self.spelledLetters fb]; % save spelled leters
+                self.spelledTxt = [self.spelledTxt self.design.fbSymbol{fb}];
+
+                % Dispaly feedback to user
+                if(self.twitterMode && fb == self.twitterObj.twitterTarg)
+                    sendTweet(self.twitterObj,self.fb_seq);
+                    show_twitter(self.twitterObj);
+                    self.TRIAL_CNT=self.EXP_END+1;
+                else
+                    if(strcmp(self.design.Symbol{fb},'<'))
+                        self.fb_seq = self.fb_seq(1:end-1);
+                    else
+                        self.fb_seq = [self.fb_seq, self.design.fbSymbol{fb}];
+                    end
+                end
+
+                % Re-Draw Screen with new feedback
+                if(self.wordPredictionMode && fb <=9)
+                    Screen(self.blankScreen, 'TextSize', self.SM_FONT_SIZE);
+                else
+                    Screen(self.blankScreen, 'TextSize', self.FONT_SIZE);
+                end
+                exp_visualFeedback(self, self.blankScreen, self.design, fb, self.RED, self.RED, self.BLACK, self.fb_seq,self.copy_seq);
+                Screen('CopyWindow', self.blankScreen, self.window);
+                Screen('Flip', self.window);
+
+                if(self.TTS_Mode)
+                    play_text(self.TTS_Obj,fb);
+                end
+
+                % Reset screen after display
+                if(self.wordPredictionMode && fb <=9)
+                    Screen(self.blankScreen, 'TextSize', self.SM_FONT_SIZE);
+                end
+                exp_visualFeedback(self, self.blankScreen, self.design, fb, self.BLACK, self.WHITE, self.WHITE, self.fb_seq,self.copy_seq);
+                Screen(self.blankScreen, 'TextSize', self.FONT_SIZE);
+            end
+            inter_trialStart = tic;
+            while toc(inter_trialStart) <= self.FB_DUR
+                [~, ~, keyCode] = KbCheck([],[],self.keypress_check_vector);
+                if keyCode(self.escKey), break; end
+            end
+        end
+        %------------------------------------------------------------------
+        
+        
+        %------------------------------------------------------------------
+        % Dependencies:
         
         function exp_GenPTBscreens(self)
         % EXP_GENPTBSCREENS generates the main PTB screens used for
@@ -423,7 +481,7 @@ classdef speller < handle
             self.tKey = KbName('t');
             self.keypress_check_vector = zeros(1,256);
             self.keypress_check_vector([self.escKey, self.enterKey, self.tKey]) = 1; 
-            self.oldDebugLevel = Screen('Preference', 'VisualDebuglevel', 3);
+            self.oldDebugLevel = Screen('Preference', 'VisualDebuglevel', 1);
             self.screens = Screen('Screens');
             self.screenNumber = max(self.screens);
             [self.window, self.windowRect] = Screen('OpenWindow', self.screenNumber, self.BG_COLOR, [], [], 2);
@@ -511,7 +569,7 @@ classdef speller < handle
             self.blankScreen = Screen(self.window, 'OpenOffScreenWindow', self.BG_COLOR);
             exp_preloadStimuli(self,'blank', self.blankScreen, self.design, stimParam);
             % ---------------------------------------------------------------------
-            % Create offscreen for start screen
+            % Create offscreen for start scree`n
             % ---------------------------------------------------------------------
             self.startScreen = Screen(self.window, 'OpenOffScreenWindow', self.BG_COLOR);
             
@@ -534,6 +592,23 @@ classdef speller < handle
             endMsg = 'Experiment Complete. Press the "ESCAPE" key to close.';
             bounds = Screen(self.endScreen, 'TextBounds', endMsg);
             Screen('DrawText', self.endScreen, endMsg, self.centX-bounds(RectRight)/2, self.centY-bounds(RectBottom)/2, self.WHITE);
+            
+            % ---------------------------------------------------------------------
+            % Create offscreen for NY times article screen
+            % ---------------------------------------------------------------------
+            self.articleScreen = Screen(self.window, 'OpenOffScreenWindow', self.BG_COLOR);
+            
+            Screen(self.articleScreen, 'TextColor', self.WHITE);
+            Screen(self.articleScreen, 'TextFont', self.TEXT_FONT);
+            Screen(self.articleScreen, 'TextSize', self.FONT_SIZE);
+            
+            headline = ['Low-Fat Diet May Ease Hot Flashes'];
+            abstract = ['A study suggests that weight loss with a low-fat, high fruit and vegetable diet may help reduce or eliminate hot flashes and night sweats associated with menopause.'];
+            
+            bounds = Screen(self.articleScreen, 'TextBounds',headline);
+            Screen('DrawText', self.articleScreen, headline, self.centX-bounds(RectRight)/2, self.design.TxtFldLoc(4), self.WHITE);
+            DrawFormattedText(self.articleScreen,WrapString(abstract),'center','center',[],[],[],[],2);
+            
         end %END exp_GenPTBscreens
         
         function design = exp_GenStimDesign(self,spellerMode, refresh, resol, stimTime,numTarg)

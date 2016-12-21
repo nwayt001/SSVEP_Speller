@@ -1,0 +1,1 @@
+matlab -nosplash -minimize -nodesktop -r "BCI = speller(); start(BCI);"

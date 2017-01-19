@@ -2,9 +2,9 @@ classdef speller < handle
 % SPELLER is the main parent class for an SSVEP based speller that uses PTB
 % for display and stimulation
     properties
-        CUE_DUR             = 1.0;
+        CUE_DUR             = 0.0;
         FB_DUR              = 1.0;
-        DEF_STIM_DUR        = 2.0;
+        DEF_STIM_DUR        = 4.0;
         WHITE               = [255, 255, 255];
         BLACK               = [  0,   0,   0];
         RED                 = [255,   0, 102];
@@ -36,29 +36,29 @@ classdef speller < handle
         vbl
         refreshRateHz
         design
-        spellerMode
-        numTarg
+        numTarg = 40
         Copy_Seq_Num
-        channels
-        sourceType
-        classifierType
+        channels = 1:16
+        sourceType ='FT'
+        classifierType ='CCA'
         spelledLetters
         spelledTxt
         running
-        showStart
+        showStart = true
         trainFileName =[];
         predictiveText
-        src_parallel_mode
+        src_parallel_mode = false
         keypress_check_vector
-        sub_info
+        SUB_DATA
         data_dir
         
         % Speller Modes
-        debugMode
-        wordPredictionMode
-        twitterMode
-        TTS_Mode
-        showFeedback
+        spellerMode = 'copyspell'
+        debugMode = true
+        wordPredictionMode = false
+        twitterMode = false
+        TTS_Mode = false
+        showFeedback = true
         
         % PTB Screens
         offScreen
@@ -77,40 +77,48 @@ classdef speller < handle
         TTS_Obj
         
         % speller article task
-        standard_words
+        standard_words = {'PIG','CAT','OWL','ANT','BEE','FOX','CAR','VAN','MUD','NUT','BED','TEA',...
+            'EAT','ASK','RAN','BUY','SIT','DIG'};
+        std_word_trials = 6;
         article_database
-        article_database_file
+        article_database_file = 'data\stimuli_articles_task.csv';
         num_articles
         article_condition
+        
+        
     end
     
     methods
         %------------------------------------------------------------------
         % Class constructor:
         function self = speller(options)
-            self.DEF_STIM_DUR = options.stimDuration;
-            self.CUE_DUR = options.CUE_DUR;
-            self.FB_DUR = options.FB_DUR;
-            self.numTarg = options.numTarg;
-            self.spellerMode = options.spellerMode;
-            self.COPY_SEQ=options.copySeq;
-            self.EXP_END = length(self.COPY_SEQ);
-            self.sourceType = options.sourceType;
-            self.classifierType = options.classifierType;
-            self.channels = options.channels;
-            self.showStart = options.showStart;
-            self.debugMode = options.debugMode;
-            self.trainFileName = options.trainFileName;
-            self.wordPredictionMode = options.wordPredictionMode;
-            self.twitterMode = options.twitterMode;
-            self.TTS_Mode = options.TTS_Mode;
-            self.src_parallel_mode = options.src_parallel_mode;
-            self.sub_info = options.sub_info;
-            self.data_dir = options.data_dir;
-            self.showFeedback = options.showFeedback;
-            % speller article task
-            self.standard_words = options.standard_words;
-            self.article_database_file = options.article_database_file;
+            if(nargin==1)
+                self.DEF_STIM_DUR = options.stimDuration;
+                self.CUE_DUR = options.CUE_DUR;
+                self.FB_DUR = options.FB_DUR;
+                self.numTarg = options.numTarg;
+                self.spellerMode = options.spellerMode;
+                self.COPY_SEQ=options.copySeq;
+                self.EXP_END = length(self.COPY_SEQ);
+                self.sourceType = options.sourceType;
+                self.classifierType = options.classifierType;
+                self.channels = options.channels;
+                self.showStart = options.showStart;
+                self.debugMode = options.debugMode;
+                self.trainFileName = options.trainFileName;
+                self.wordPredictionMode = options.wordPredictionMode;
+                self.twitterMode = options.twitterMode;
+                self.TTS_Mode = options.TTS_Mode;
+                self.src_parallel_mode = options.src_parallel_mode;
+                self.SUB_DATA = options.SUB_DATA;
+                self.data_dir = options.data_dir;
+                self.showFeedback = options.showFeedback;
+                % speller article task
+                self.standard_words = options.standard_words;
+            else
+                % Get Subject Information
+                getSubjectInfo(self);
+            end
             Priority(1); % set to high priority
             initialize(self); % initialize speller display 
             Screen('Preference', 'SkipSyncTests', 1);
@@ -120,10 +128,133 @@ classdef speller < handle
         
         %------------------------------------------------------------------
         % Main Functions:
+        
+        % Get subject info
+        function getSubjectInfo(self)
+            % Open Dialog box to get subject ID and Session Number
+            prompt = {'Enter Subject Initials (e.g. NRW)','Enter Session Number'};
+            dlg_title = 'SubInfo';
+            num_lines = 1;
+            defaultans = {'XXX','1'};
+            answer = inputdlg(prompt,dlg_title,num_lines,defaultans);
+            self.SUB_DATA.sub_id=answer{1};
+            self.SUB_DATA.session_num = str2double(answer{2});
+            self.SUB_DATA.file_name = ['data/ExperimentData/Subject_' self.SUB_DATA.sub_id '_data.csv'];
+            
+            % If this is the subjects first session, generate an
+            % experimental file for all sessions for this subject. If not,
+            % load the existing subject experimental file
+            if(self.SUB_DATA.session_num==1 && ~exist(self.SUB_DATA.file_name,'file'))
+                [~,~,orig_stimuli] = xlsread(self.article_database_file);
+                
+                % Generate NY times stimuli order for all sessions
+                all_ids = randperm(size(orig_stimuli,1)-1);
+                social_ids = all_ids(1:30); %10 session, 3 articls per sesh
+                nonSocial_ids = all_ids(31:60); %10 session, 3 articls per sesh
+                social_ = reshape(social_ids,3,10);
+                nonsocial_ = reshape(nonSocial_ids,3,10);
+                
+                redo = true;
+                while redo
+                    redo = false;
+                    total_ = [social_ nonsocial_];
+                    labels = [ones(1,length(social_)) zeros(1,length(nonsocial_))];
+                    sesh_idx = randperm(20);
+                    total_=total_(:,sesh_idx);
+                    labels = labels(sesh_idx);
+                    for win=1:length(labels)-3;
+                        if(length(unique(labels(win:win+3)))==1)
+                            redo = true;
+                            break;
+                        end
+                    end
+                end
+                labels = labels';
+                % new subject stimuli order 
+                self.SUB_DATA.article_task(1,:) = {orig_stimuli{1,:}};
+                cnt=1;
+                for i=1:size(total_,2)
+                    for j=1:size(total_,1)
+                        self.SUB_DATA.article_task(cnt+1,:)={orig_stimuli{total_(j,i)+1,:}};
+                        cnt=cnt+1;
+                    end
+                end
+                self.SUB_DATA.article_task{1,9} = 'session';
+                self.SUB_DATA.article_task{1,10} = 'condition';
+                self.SUB_DATA.article_task{1,11} = 'result';
+                cnt=1;
+                for i=1:20
+                    for j=1:3
+                        self.SUB_DATA.article_task{cnt+1,9} = i;
+                        self.SUB_DATA.article_task{cnt+1,10}=labels(i);
+                        cnt=cnt+1;
+                    end
+                end
+                
+                % Generate Fixed Spelling Order for all sessions
+                self.SUB_DATA.fixed_spell{1,1}='session';
+                self.SUB_DATA.fixed_spell{1,2}='condition';
+                self.SUB_DATA.fixed_spell{1,3}='word_num';
+                self.SUB_DATA.fixed_spell{1,4}='word';
+                self.SUB_DATA.fixed_spell{1,5}='result';
+                self.SUB_DATA.fixed_spell{1,6}='result_txt';
+                cnt=1;
+                for i=1:20
+                    idx = randperm(18,12);
+                    for j=1:length(idx)
+                        self.SUB_DATA.fixed_spell{cnt+1,1} = i;
+                        self.SUB_DATA.fixed_spell{cnt+1,2} = double(j>length(idx)/2);
+                        self.SUB_DATA.fixed_spell{cnt+1,3} = idx(j);
+                        self.SUB_DATA.fixed_spell{cnt+1,4} = self.standard_words{idx(j)};
+                        cnt=cnt+1;
+                    end
+                end
+                
+                % Generate Passive Spelling Order for all sessions
+                self.SUB_DATA.combination{1,1}='session';
+                self.SUB_DATA.combination{1,2}='condition';
+                cnt=1;
+                for i = 1:20
+                    for j=1:10
+                        idx = randperm(4);
+                        for k =1:length(idx)
+                            self.SUB_DATA.combination{cnt+1,1} = i;
+                            self.SUB_DATA.combination{cnt+1,2} = idx(k);
+                            cnt=cnt+1;
+                        end
+                    end
+                end
+                
+                % Generate Stroop Trials?
+                
+                % Save file 
+                xlswrite(self.SUB_DATA.file_name,self.SUB_DATA.article_task,'article');
+                xlswrite(self.SUB_DATA.file_name,self.SUB_DATA.fixed_spell,'fixed_spell');
+                xlswrite(self.SUB_DATA.file_name,self.SUB_DATA.combination,'combination');
+            end
+            
+            % Load Subject Experimental File and set paradigm
+            [self.SUB_DATA.article_task_num,~,self.SUB_DATA.article_task] = xlsread(self.SUB_DATA.file_name,'article');
+            [self.SUB_DATA.fixed_spell_num,~,self.SUB_DATA.fixed_spell] = xlsread(self.SUB_DATA.file_name,'fixed_spell');
+            [self.SUB_DATA.combination_num,~,self.SUB_DATA.combination] = xlsread(self.SUB_DATA.file_name,'combination');
+        end
+        
         function initialize(self)
         % INITIALIZE starts up the PTB windows, speller screens and other
         % modules used to run the BCI speller
-        
+
+            % load ny times articles
+            [num,~,raw] = xlsread(self.article_database_file);
+            % load article data based on session nummber 
+            self.num_articles = length(find(num(:,end)==self.SUB_DATA.session_num));
+            idx = find(num(:,end)==self.SUB_DATA.session_num);
+            for i=1:self.num_articles
+                self.article_database(i).headline = raw(idx(i)+1,2);
+                self.article_database(i).abstract = raw(idx(i)+1,3);
+            end
+            self.num_articles = 3;
+            self.article_condition = raw(idx(1)+1,end-1);
+            
             % determine copy spell or free spell mode
             if(strcmpi(self.spellerMode,'freespell'))
                 self.copy_seq=[];
@@ -135,25 +266,12 @@ classdef speller < handle
             if(self.wordPredictionMode)
                 self.wordPredictorObj = WordPredictor();
                 self.predictiveText = PredictWords(self.wordPredictorObj,[]);
-            end
+            end 
             
             % determine if twitter mode
             if(self.twitterMode)
                 self.twitterObj = TwitterApp();
             end
-            
-            % load ny times articles
-            display(self.article_database_file);
-            [num,~,raw] = xlsread(self.article_database_file);
-            % load article data based on session nummber 
-            self.num_articles = length(find(num(:,end)==self.sub_info.session_num));
-            idx = find(num(:,end)==self.sub_info.session_num);
-            for i=1:self.num_articles
-                self.article_database(i).headline = raw(idx(i)+1,2);
-                self.article_database(i).abstract = raw(idx(i)+1,3);
-            end
-            self.num_articles = 4;
-            self.article_condition = raw(idx(1)+1,end-1);
             
             % Init PTB and generate speller Screens
             exp_GenPTBscreens(self);
@@ -181,7 +299,6 @@ classdef speller < handle
                     self.classifierObj = Mouse_Classifier(self.window,self.design.StimLoc);
             end
             
-            
         end % END initialze
         
         function terminate(self)
@@ -200,7 +317,7 @@ classdef speller < handle
                     classifierType = self.classifierType;
                     sourceType = self.sourceType;
                     spelledTxt = self.spelledTxt;
-                    save([self.data_dir 'S' self.sub_info.sub_id 'S' int2str(self.sub_info.session_num)]...
+                    save([self.data_dir 'S' self.SUB_DATA.sub_id 'S' int2str(self.SUB_DATA.session_num)]...
                         ,'spelledLetters', 'COPY_SEQ','spellerMode','twitterMode',...
                         'wordPredictionMode','classifierType','sourceType','spelledTxt');
                 end
@@ -233,10 +350,24 @@ classdef speller < handle
             Screen('CopyWindow', self.copySpellInstructionScreen, self.window);
             Screen('Flip', self.window);
             user_pause(self); % Pause
-            for word=1:length(self.standard_words)
-                run_copyspell_trial(self, self.standard_words{word});
+            idx = find((self.SUB_DATA.fixed_spell_num(:,1)...
+                == self.SUB_DATA.session_num & self.SUB_DATA.fixed_spell_num(:,2) == 0));
+            words = self.SUB_DATA.fixed_spell_num(idx,3);
+            for w=1:length(words)
+                run_copyspell_trial(self, self.standard_words{words(w)});
+                % Save Results***
+                self.SUB_DATA.fixed_spell{idx(w)+1,5} = [int2str(self.fb_seq(1))...
+                    int2str(self.fb_seq(2)) int2str(self.fb_seq(3))];
+                self.SUB_DATA.fixed_spell{idx(w)+1,6} = [self.design.fbSymbol{self.fb_seq(1)}...
+                    self.design.fbSymbol{self.fb_seq(1)} self.design.fbSymbol{self.fb_seq(1)}];
             end
             
+            % *TODO* Implement passive viewing paradigm, load and save
+            % PASSIVE VIEWING
+            run_passive_viewing(self);
+            
+            % *TODO* Load in correct ny times articles from SUB_DATA and
+            % save results
             % ARTICLE - FREE SPELL 
             % display instruction screen
             Screen('CopyWindow', self.articleInstructionScreen, self.window);
@@ -245,15 +376,27 @@ classdef speller < handle
             for article = 1:self.num_articles
                 run_article_sequence(self,article);
                 run_freespell_trial(self,article);
+                % Save Results***
             end
             
-            % STANDARD WORDS
+             % STANDARD WORDS
             Screen('CopyWindow', self.copySpellInstructionScreen, self.window);
             Screen('Flip', self.window);
             user_pause(self); % Pause
-            for word=1:length(self.standard_words)
-                run_copyspell_trial(self, self.standard_words{word});
+            idx = find((self.SUB_DATA.fixed_spell_num(:,1)...
+                == self.SUB_DATA.session_num & self.SUB_DATA.fixed_spell_num(:,2) == 0));
+            words = self.SUB_DATA.fixed_spell_num(idx,3);
+            for w=1:length(words)
+                run_copyspell_trial(self, self.standard_words{words(w)});
+                % Save Results***
+                self.SUB_DATA.fixed_spell{idx(w)+1,5} = [int2str(self.fb_seq(1))...
+                    int2str(self.fb_seq(2)) int2str(self.fb_seq(3))];
+                self.SUB_DATA.fixed_spell{idx(w)+1,6} = [self.design.fbSymbol{self.fb_seq(1)}...
+                    self.design.fbSymbol{self.fb_seq(1)} self.design.fbSymbol{self.fb_seq(1)}];
             end
+            
+            % *TODO* implement stroop task, load and saving
+            % STROOP
             
             % experiemnt complete, terminate
             terminate(self); % terminate speller when done
@@ -333,7 +476,7 @@ classdef speller < handle
             end
         end
         
-        % function that pause the paradigm and waits for user input
+        % function that pauses the paradigm and waits for user input
         function keepGoing = user_pause(self)
             %manual pause
             while 1
@@ -739,34 +882,39 @@ classdef speller < handle
             % Set stimulus frequencies and flickering codes for each target
             for column_i = 1:1:numColumn
                 for row_i = 1:1:numRow
-                    stimFreq{numColumn*(row_i-1)+column_i} = minFreq + freqResol*(numRow*(column_i-1)+(row_i-1));
+%                     stimFreq{numColumn*(row_i-1)+column_i} = minFreq + freqResol*(numRow*(column_i-1)+(row_i-1));
                     stimPhase{numColumn*(row_i-1)+column_i} = wrapTo2Pi(minPhase + phaseResol*(numRow*(column_i-1)+(row_i-1)));
                 end % row_i
             end % column_i
             
-%             % temporary override for debugging
-%             stimFreq{1} = 66;
-%             stimFreq{2} = 68;
-%             stimFreq{3} = 70;
-%             stimFreq{4} = 72;
+            % set stim frequencies to: 7Hz - 15.8Hz spaced 0.2Hz apart (45)
+            % skipping 7.8, 9.4, 11, 12.6, 14.2 (40 total)            
+            stimFreqTmp = [7:0.2:7.6 8.0:0.2:9.2 9.6:0.2:10.8 11.2:0.2:12.4 12.8:0.2:14.0 14.4:0.2:15.8];
             
+            % randomize (randomize in groups of mid, low and high)
+            stimFreqTmp = [stimFreqTmp(randperm(14)) stimFreqTmp(randperm(14)+14) stimFreqTmp(randperm(12)+28)];
+            
+            % convert to cell array
+            for i=1:length(stimFreqTmp)
+                stimFreq{i} = stimFreqTmp(i);
+            end
             
             % Set location for each stimulus
             vBlockSize  = wid/10;
             hBlockSize  = wid/10;
             
             % Set symbols for each stimulus
-            tmpSymbol      = {'1', '2', '3', '4', '5', '6', '7', '8', '9', '0',...
-                'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P',...
-                'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ' ',...
-                'Z', 'X', 'C', 'V', 'B', 'N', 'M', ',', '.', '<'};
+            tmpSymbol={'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P',...
+                'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', '?',...
+                'Z', 'X', 'C', 'V', 'B', 'N', 'M', ',', '.', '!',...
+                '$',':',';','(',')',' ','@','#','&','<'};
             
             % File name for audio files
             tmpNameAudio   = {'1', '2', '3', '4', '5', '6', '7', '8', '9', '0',...
                 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P',...
                 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', 'space',...
                 'Z', 'X', 'C', 'V', 'B', 'N', 'M', 'comma', 'period', 'Back Space'};
-            
+
             eraseTarg   = numTarg;
             enterTarg   = numTarg+1; % It's dummy
             

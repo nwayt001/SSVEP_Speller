@@ -20,6 +20,7 @@ classdef speller < handle
         TRIAL_CNT           = 1;
         numHarmonics        = 2;
         fb_seq
+        fb_seq2
         EXP_END
         escKey
         enterKey
@@ -54,7 +55,7 @@ classdef speller < handle
         
         % Speller Modes
         spellerMode = 'copyspell'
-        debugMode = true
+        debugMode = false
         wordPredictionMode = false
         twitterMode = false
         TTS_Mode = false
@@ -68,6 +69,7 @@ classdef speller < handle
         articleScreen
         articleInstructionScreen
         copySpellInstructionScreen
+        passiveViewInstructionScreen
         
         % Class objects
         sourceObj
@@ -84,7 +86,7 @@ classdef speller < handle
         article_database_file = 'data\stimuli_articles_task.csv';
         num_articles
         article_condition
-        
+        article_condition_text
         
     end
     
@@ -197,7 +199,6 @@ classdef speller < handle
                 self.SUB_DATA.fixed_spell{1,3}='word_num';
                 self.SUB_DATA.fixed_spell{1,4}='word';
                 self.SUB_DATA.fixed_spell{1,5}='result';
-                self.SUB_DATA.fixed_spell{1,6}='result_txt';
                 cnt=1;
                 for i=1:20
                     idx = randperm(18,12);
@@ -242,18 +243,6 @@ classdef speller < handle
         function initialize(self)
         % INITIALIZE starts up the PTB windows, speller screens and other
         % modules used to run the BCI speller
-
-            % load ny times articles
-            [num,~,raw] = xlsread(self.article_database_file);
-            % load article data based on session nummber 
-            self.num_articles = length(find(num(:,end)==self.SUB_DATA.session_num));
-            idx = find(num(:,end)==self.SUB_DATA.session_num);
-            for i=1:self.num_articles
-                self.article_database(i).headline = raw(idx(i)+1,2);
-                self.article_database(i).abstract = raw(idx(i)+1,3);
-            end
-            self.num_articles = 3;
-            self.article_condition = raw(idx(1)+1,end-1);
             
             % determine copy spell or free spell mode
             if(strcmpi(self.spellerMode,'freespell'))
@@ -307,23 +296,11 @@ classdef speller < handle
             ShowCursor;
             Screen('Preference', 'VisualDebuglevel', 1);    
             % save results
-            try
-                if(self.showFeedback)
-                    COPY_SEQ = self.COPY_SEQ;
-                    spelledLetters = self.spelledLetters;
-                    spellerMode = self.spellerMode;
-                    twitterMode = self.twitterMode;
-                    wordPredictionMode = self.wordPredictionMode;
-                    classifierType = self.classifierType;
-                    sourceType = self.sourceType;
-                    spelledTxt = self.spelledTxt;
-                    save([self.data_dir 'S' self.SUB_DATA.sub_id 'S' int2str(self.SUB_DATA.session_num)]...
-                        ,'spelledLetters', 'COPY_SEQ','spellerMode','twitterMode',...
-                        'wordPredictionMode','classifierType','sourceType','spelledTxt');
-                end
-            catch
-            end
+            xlswrite(self.SUB_DATA.file_name,self.SUB_DATA.article_task,'article');
+            xlswrite(self.SUB_DATA.file_name,self.SUB_DATA.fixed_spell,'fixed_spell');
+            xlswrite(self.SUB_DATA.file_name,self.SUB_DATA.combination,'combination');
             
+            % close out objects
             try
                 terminate(self.sourceObj);
             catch
@@ -347,7 +324,7 @@ classdef speller < handle
             end
             
              % STANDARD WORDS
-            Screen('CopyWindow', self.copySpellInstructionScreen, self.window);
+            Screen('CopyWindow', self.copySpellInstructionScreen, self.window); 
             Screen('Flip', self.window);
             user_pause(self); % Pause
             idx = find((self.SUB_DATA.fixed_spell_num(:,1)...
@@ -356,27 +333,28 @@ classdef speller < handle
             for w=1:length(words)
                 run_copyspell_trial(self, self.standard_words{words(w)});
                 % Save Results***
-                self.SUB_DATA.fixed_spell{idx(w)+1,5} = [int2str(self.fb_seq(1))...
-                    int2str(self.fb_seq(2)) int2str(self.fb_seq(3))];
-                self.SUB_DATA.fixed_spell{idx(w)+1,6} = [self.design.fbSymbol{self.fb_seq(1)}...
-                    self.design.fbSymbol{self.fb_seq(1)} self.design.fbSymbol{self.fb_seq(1)}];
+                self.SUB_DATA.fixed_spell{idx(w)+1,5} = self.fb_seq2;
             end
             
             % *TODO* Implement passive viewing paradigm, load and save
             % PASSIVE VIEWING
+            Screen('CopyWindow', self.passiveViewInstructionScreen, self.window); 
+            Screen('Flip', self.window);
+            user_pause(self); % Pause
             run_passive_viewing(self);
             
-            % *TODO* Load in correct ny times articles from SUB_DATA and
-            % save results
             % ARTICLE - FREE SPELL 
             % display instruction screen
+            idx = find(self.SUB_DATA.article_task_num(:,9) == self.SUB_DATA.session_num);
+            condition = self.SUB_DATA.article_task_num(idx(1),10);
             Screen('CopyWindow', self.articleInstructionScreen, self.window);
             Screen('Flip', self.window);
             user_pause(self); % Pause
-            for article = 1:self.num_articles
-                run_article_sequence(self,article);
-                run_freespell_trial(self,article);
+            for article = 1:length(idx)
+                run_article_sequence(self,self.SUB_DATA.article_task{idx(article)+1,2},self.SUB_DATA.article_task{idx(article)+1,3},condition);
+                run_freespell_trial(self,self.SUB_DATA.article_task{idx(article)+1,2});
                 % Save Results***
+                self.SUB_DATA.article_task{idx(article)+1,11} = self.fb_seq2;
             end
             
              % STANDARD WORDS
@@ -384,15 +362,12 @@ classdef speller < handle
             Screen('Flip', self.window);
             user_pause(self); % Pause
             idx = find((self.SUB_DATA.fixed_spell_num(:,1)...
-                == self.SUB_DATA.session_num & self.SUB_DATA.fixed_spell_num(:,2) == 0));
+                == self.SUB_DATA.session_num & self.SUB_DATA.fixed_spell_num(:,2) == 1));
             words = self.SUB_DATA.fixed_spell_num(idx,3);
             for w=1:length(words)
                 run_copyspell_trial(self, self.standard_words{words(w)});
                 % Save Results***
-                self.SUB_DATA.fixed_spell{idx(w)+1,5} = [int2str(self.fb_seq(1))...
-                    int2str(self.fb_seq(2)) int2str(self.fb_seq(3))];
-                self.SUB_DATA.fixed_spell{idx(w)+1,6} = [self.design.fbSymbol{self.fb_seq(1)}...
-                    self.design.fbSymbol{self.fb_seq(1)} self.design.fbSymbol{self.fb_seq(1)}];
+                self.SUB_DATA.fixed_spell{idx(w)+1,5} = self.fb_seq2;
             end
             
             % *TODO* implement stroop task, load and saving
@@ -408,19 +383,21 @@ classdef speller < handle
         end
         
         %this function runs the ny times article sequence
-        function run_article_sequence(self,article)
+        function run_article_sequence(self, article_headline, article_abstract,condition)
             % setup next article
             self.articleScreen = Screen(self.window, 'OpenOffScreenWindow', self.BG_COLOR);
             Screen(self.articleScreen, 'TextColor', self.WHITE);
             Screen(self.articleScreen, 'TextFont', self.TEXT_FONT);
             Screen(self.articleScreen, 'TextSize', self.FONT_SIZE);
             
-            bounds = Screen('TextBounds',self.articleScreen ,self.article_database(article).headline{1});
-            Screen('DrawText', self.articleScreen, self.article_database(article).headline{1},...
-                self.centX-bounds(RectRight)/2, self.design.TxtFldLoc(4), self.WHITE);
-            DrawFormattedText(self.articleScreen,WrapString(self.article_database(article).abstract{1})...
+            bounds = Screen('TextBounds',self.articleScreen ,self.article_condition_text{condition+1});
+            Screen('DrawText', self.articleScreen, self.article_condition_text{condition+1},...
+                self.centX-bounds(RectRight)/2, self.design.TxtFldLoc(4)-50, self.WHITE);
+            bounds = Screen('TextBounds',self.articleScreen ,['"' article_headline '"']);
+            Screen('DrawText', self.articleScreen, ['"' article_headline '"'],...
+                self.centX-bounds(RectRight)/2, self.design.TxtFldLoc(4)+150, self.WHITE);
+            DrawFormattedText(self.articleScreen,WrapString(article_abstract)...
                 ,'center','center',[],[],[],[],2);
-            
             
             % display article and wait for user to continue
             Screen('CopyWindow', self.articleScreen, self.window);
@@ -430,9 +407,9 @@ classdef speller < handle
         end
         
         %this snippit runs a free spelling run
-        function run_freespell_trial(self,article)
+        function run_freespell_trial(self,optional_text)
             self.spellerMode = 'articlespell';
-            self.fb_seq = []; self.copy_seq=self.article_database(article).headline{1};
+            self.fb_seq = []; self.fb_seq2=[]; self.copy_seq=optional_text;
             spelling=true;
             while(spelling)
                 
@@ -440,8 +417,8 @@ classdef speller < handle
                 displayCue(self);                    % CUE                
                 spelling = user_pause(self);         % Pause
                 if(spelling)
-                    stimulate(self);                     % Stimulation
-                    displayFeedback(self);               % Feedback
+                    stimulate(self);                 % Stimulation
+                    displayFeedback(self);           % Feedback
                 end
                 
             end
@@ -453,7 +430,7 @@ classdef speller < handle
             % spell until word is completely spelled
             self.TRIAL_CNT=1;
             self.COPY_SEQ = word2spell;
-            self.fb_seq = [];
+            self.fb_seq = []; self.fb_seq2 = [];
             % translate txt 2 spell 2 number array
             for xx = 1:length(self.COPY_SEQ)
                 for jj = 1:length(self.design.Symbol)
@@ -645,10 +622,12 @@ classdef speller < handle
                     show_twitter(self.twitterObj);
                     self.TRIAL_CNT=self.EXP_END+1;
                 else
-                    if(strcmp(self.design.Symbol{fb},'<'))
+                    if(strcmp(self.design.Symbol{fb},'<') && ~strcmp(self.spellerMode,'copyspell2'))
                         self.fb_seq = self.fb_seq(1:end-1);
+                        self.fb_seq2 = [self.fb_seq2, self.design.fbSymbol{fb}];
                     else
                         self.fb_seq = [self.fb_seq, self.design.fbSymbol{fb}];
+                        self.fb_seq2 = [self.fb_seq2, self.design.fbSymbol{fb}];
                     end
                 end
 
@@ -797,9 +776,14 @@ classdef speller < handle
             Screen(self.startScreen, 'TextFont', self.TEXT_FONT);
             Screen(self.startScreen, 'TextSize', self.FONT_SIZE);
             
-            startMsg = 'Are you ready? Press the "ENTER" key to start spelling.';
-            bounds = Screen(self.startScreen, 'TextBounds', startMsg);
-            Screen('DrawText', self.startScreen, startMsg, self.centX-bounds(RectRight)/2, self.centY-bounds(RectBottom)/2, self.WHITE);
+            startMsg = ['You are about to start the daily experiment. In this session, you will copy-spell six three-letter' ...
+                ' words, passively view stimuli, and summarize three NY times articles. \n This experiment is self paced. ' ...
+                'For every pause, press "ENTER" to continue. During the free spell portions, press'...
+                ' "ESC" when finished spelling. If you are unsure about any part of the task, plase ask the experimenter for clarification. /n'...
+                ' Press "ENTER" to begin'];  
+            
+            DrawFormattedText(self.startScreen,WrapString(startMsg),'center','center',[],[],[],[],2);
+            
             % ---------------------------------------------------------------------
             % Create offscreen for Ending screen
             % ---------------------------------------------------------------------
@@ -829,7 +813,6 @@ classdef speller < handle
             Screen('DrawText', self.articleScreen, headline, self.centX-bounds(RectRight)/2, self.design.TxtFldLoc(4), self.WHITE);
             DrawFormattedText(self.articleScreen,WrapString(abstract),'center','center',[],[],[],[],2);
             
-            
             % ---------------------------------------------------------------------
             % Create instruction screen for article task
             % ---------------------------------------------------------------------
@@ -839,24 +822,33 @@ classdef speller < handle
             Screen(self.articleInstructionScreen, 'TextFont', self.TEXT_FONT);
             Screen(self.articleInstructionScreen, 'TextSize', self.FONT_SIZE);
             
-            if(strcmp('share',self.article_condition))
-                instruction_text = 'Share this article with your Twitter followers by saying something about it';
-            else
-                instruction_text = 'Write the first few words of headline';
-            end
+            self.article_condition_text{1}='Share this article with your Twitter followers by saying something about it';
+            self.article_condition_text{2}='Write the first few words of headline';
             
-            DrawFormattedText(self.articleInstructionScreen,WrapString(instruction_text),'center','center',[],[],[],[],2);
+            general_instruction_text='Next, you will read three short NY times articles and perform a free spelling about the article. Press "ESC" when done spelling.';
+            DrawFormattedText(self.articleInstructionScreen,WrapString(general_instruction_text),'center','center',[],[],[],[],2);
             
             % ---------------------------------------------------------------------
-            % Create instruction screen for standar word, copy speller task
+            % Create instruction screen for standard word, copy speller task
             % ---------------------------------------------------------------------
             self.copySpellInstructionScreen = Screen(self.window, 'OpenOffScreenWindow', self.BG_COLOR);
             
             Screen(self.copySpellInstructionScreen, 'TextColor', self.WHITE);
             Screen(self.copySpellInstructionScreen, 'TextFont', self.TEXT_FONT);
             Screen(self.copySpellInstructionScreen, 'TextSize', self.FONT_SIZE);
-            instruction_text = 'Please spell the indicated word. Focus on the blue square and press enter button.';
+            instruction_text = 'Please spell the indicated word. For each letter, visually attend to the letter during stimulation. Press enter to begin the stimulation for each letter.';
             DrawFormattedText(self.copySpellInstructionScreen,WrapString(instruction_text),'center','center',[],[],[],[],2);
+            
+            % ---------------------------------------------------------------------
+            % Create instruction screen for passive viewing task
+            % ---------------------------------------------------------------------
+            self.passiveViewInstructionScreen = Screen(self.window, 'OpenOffScreenWindow', self.BG_COLOR);
+            
+            Screen(self.passiveViewInstructionScreen, 'TextColor', self.WHITE);
+            Screen(self.passiveViewInstructionScreen, 'TextFont', self.TEXT_FONT);
+            Screen(self.passiveViewInstructionScreen, 'TextSize', self.FONT_SIZE);
+            instruction_text = 'Passive Viewing Section. Please press "ENTER" and fixate on the cross. (Not yet implemented...)';
+            DrawFormattedText(self.passiveViewInstructionScreen,WrapString(instruction_text),'center','center',[],[],[],[],2);
             
         end %END exp_GenPTBscreens
         

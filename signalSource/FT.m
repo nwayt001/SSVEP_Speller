@@ -45,6 +45,10 @@ classdef FT < Signal_IO
                     ft.endEvent = 0;
                 else 
                     % initialize arduino comms
+                    % 192.168.208.135 is the ip that the program on the
+                    % arduino uno is currently set to. Set ip of the
+                    % stimulation computer to something else like:
+                    % 192.168.208.136
                     ft.udpSocket = udp('192.168.208.135',1236);
                     fopen(ft.udpSocket);
                     fwrite(ft.udpSocket,'y');

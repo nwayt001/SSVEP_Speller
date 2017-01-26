@@ -43,6 +43,9 @@ classdef (Abstract) SSVEP_classifier < base_classifier
                 end
         end
         
+        function terminate(~)
+        % terminate function
+        end
         %------------------------------------------------------------------
     
     end

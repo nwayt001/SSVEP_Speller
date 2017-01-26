@@ -55,11 +55,13 @@ classdef speller < handle
         
         % Speller Modes
         spellerMode = 'copyspell'
-        debugMode = false
+        debugMode = true
         wordPredictionMode = false
         twitterMode = false
         TTS_Mode = false
         showFeedback = true
+        fullmatrix
+        RunCalibration = false
         
         % PTB Screens
         offScreen
@@ -70,6 +72,7 @@ classdef speller < handle
         articleInstructionScreen
         copySpellInstructionScreen
         passiveViewInstructionScreen
+        startCalibrationScreen
         
         % Class objects
         sourceObj
@@ -141,103 +144,124 @@ classdef speller < handle
             answer = inputdlg(prompt,dlg_title,num_lines,defaultans);
             self.SUB_DATA.sub_id=answer{1};
             self.SUB_DATA.session_num = str2double(answer{2});
-            self.SUB_DATA.file_name = ['data/ExperimentData/Subject_' self.SUB_DATA.sub_id '_data.csv'];
             
-            % If this is the subjects first session, generate an
-            % experimental file for all sessions for this subject. If not,
-            % load the existing subject experimental file
-            if(self.SUB_DATA.session_num==1 && ~exist(self.SUB_DATA.file_name,'file'))
-                [~,~,orig_stimuli] = xlsread(self.article_database_file);
+            % If session is 0, then this is a calibration session. setup
+            % speller with calibration parameters
+            if(self.SUB_DATA.session_num==0)
+                prompt = {'Enter # of calibration runs:'};
+                dlg_title = 'Calibration Session';
+                num_lines = 1;
+                defaultans = {'3'};
+                answer = inputdlg(prompt,dlg_title,num_lines,defaultans);
+                self.SUB_DATA.num_calibration_runs = int2str(answer);
+                self.SUB_DATA.file_name = ['data/CalibrationData/Subject_' self.SUB_DATA.sub_id '_data.csv'];
+                self.SUB_DATA.calibration_task{1,1} = 'Run';
+                self.SUB_DATA.calibration_task{1,2} = 'Targets';
+                self.CUE_DUR = 2;
+                self.FB_DUR = 0;
+                self.DEF_STIM_DUR = 6;
+                self.RunCalibration = true;  % run calibration sequence
                 
-                % Generate NY times stimuli order for all sessions
-                all_ids = randperm(size(orig_stimuli,1)-1);
-                social_ids = all_ids(1:30); %10 session, 3 articls per sesh
-                nonSocial_ids = all_ids(31:60); %10 session, 3 articls per sesh
-                social_ = reshape(social_ids,3,10);
-                nonsocial_ = reshape(nonSocial_ids,3,10);
+            else % else, this is a normal session
+                self.SUB_DATA.file_name = ['data/ExperimentData/Subject_' self.SUB_DATA.sub_id '_data.csv'];
+                self.RunCalibration = false;  % run daily speller paradigm
                 
-                redo = true;
-                while redo
-                    redo = false;
-                    total_ = [social_ nonsocial_];
-                    labels = [ones(1,length(social_)) zeros(1,length(nonsocial_))];
-                    sesh_idx = randperm(20);
-                    total_=total_(:,sesh_idx);
-                    labels = labels(sesh_idx);
-                    for win=1:length(labels)-3;
-                        if(length(unique(labels(win:win+3)))==1)
-                            redo = true;
-                            break;
+                % If this is the subjects first session, generate an
+                % experimental file for all sessions for this subject. If not,
+                % load the existing subject experimental file
+                if(self.SUB_DATA.session_num==1 && ~exist(self.SUB_DATA.file_name,'file'))
+                    [~,~,orig_stimuli] = xlsread(self.article_database_file);
+
+                    % Generate NY times stimuli order for all sessions
+                    all_ids = randperm(size(orig_stimuli,1)-1);
+                    social_ids = all_ids(1:30); %10 session, 3 articls per sesh
+                    nonSocial_ids = all_ids(31:60); %10 session, 3 articls per sesh
+                    social_ = reshape(social_ids,3,10);
+                    nonsocial_ = reshape(nonSocial_ids,3,10);
+
+                    redo = true;
+                    while redo
+                        redo = false;
+                        total_ = [social_ nonsocial_];
+                        labels = [ones(1,length(social_)) zeros(1,length(nonsocial_))];
+                        sesh_idx = randperm(20);
+                        total_=total_(:,sesh_idx);
+                        labels = labels(sesh_idx);
+                        for win=1:length(labels)-3;
+                            if(length(unique(labels(win:win+3)))==1)
+                                redo = true;
+                                break;
+                            end
                         end
                     end
-                end
-                labels = labels';
-                % new subject stimuli order 
-                self.SUB_DATA.article_task(1,:) = {orig_stimuli{1,:}};
-                cnt=1;
-                for i=1:size(total_,2)
-                    for j=1:size(total_,1)
-                        self.SUB_DATA.article_task(cnt+1,:)={orig_stimuli{total_(j,i)+1,:}};
-                        cnt=cnt+1;
-                    end
-                end
-                self.SUB_DATA.article_task{1,9} = 'session';
-                self.SUB_DATA.article_task{1,10} = 'condition';
-                self.SUB_DATA.article_task{1,11} = 'result';
-                cnt=1;
-                for i=1:20
-                    for j=1:3
-                        self.SUB_DATA.article_task{cnt+1,9} = i;
-                        self.SUB_DATA.article_task{cnt+1,10}=labels(i);
-                        cnt=cnt+1;
-                    end
-                end
-                
-                % Generate Fixed Spelling Order for all sessions
-                self.SUB_DATA.fixed_spell{1,1}='session';
-                self.SUB_DATA.fixed_spell{1,2}='condition';
-                self.SUB_DATA.fixed_spell{1,3}='word_num';
-                self.SUB_DATA.fixed_spell{1,4}='word';
-                self.SUB_DATA.fixed_spell{1,5}='result';
-                cnt=1;
-                for i=1:20
-                    idx = randperm(18,12);
-                    for j=1:length(idx)
-                        self.SUB_DATA.fixed_spell{cnt+1,1} = i;
-                        self.SUB_DATA.fixed_spell{cnt+1,2} = double(j>length(idx)/2);
-                        self.SUB_DATA.fixed_spell{cnt+1,3} = idx(j);
-                        self.SUB_DATA.fixed_spell{cnt+1,4} = self.standard_words{idx(j)};
-                        cnt=cnt+1;
-                    end
-                end
-                
-                % Generate Passive Spelling Order for all sessions
-                self.SUB_DATA.combination{1,1}='session';
-                self.SUB_DATA.combination{1,2}='condition';
-                cnt=1;
-                for i = 1:20
-                    for j=1:10
-                        idx = randperm(4);
-                        for k =1:length(idx)
-                            self.SUB_DATA.combination{cnt+1,1} = i;
-                            self.SUB_DATA.combination{cnt+1,2} = idx(k);
+                    labels = labels';
+                    % new subject stimuli order 
+                    self.SUB_DATA.article_task(1,:) = {orig_stimuli{1,:}};
+                    cnt=1;
+                    for i=1:size(total_,2)
+                        for j=1:size(total_,1)
+                            self.SUB_DATA.article_task(cnt+1,:)={orig_stimuli{total_(j,i)+1,:}};
                             cnt=cnt+1;
                         end
                     end
+                    self.SUB_DATA.article_task{1,9} = 'session';
+                    self.SUB_DATA.article_task{1,10} = 'condition';
+                    self.SUB_DATA.article_task{1,11} = 'result';
+                    cnt=1;
+                    for i=1:20
+                        for j=1:3
+                            self.SUB_DATA.article_task{cnt+1,9} = i;
+                            self.SUB_DATA.article_task{cnt+1,10}=labels(i);
+                            cnt=cnt+1;
+                        end
+                    end
+
+                    % Generate Fixed Spelling Order for all sessions
+                    self.SUB_DATA.fixed_spell{1,1}='session';
+                    self.SUB_DATA.fixed_spell{1,2}='condition';
+                    self.SUB_DATA.fixed_spell{1,3}='word_num';
+                    self.SUB_DATA.fixed_spell{1,4}='word';
+                    self.SUB_DATA.fixed_spell{1,5}='result';
+                    cnt=1;
+                    for i=1:20
+                        idx = randperm(18,12);
+                        for j=1:length(idx)
+                            self.SUB_DATA.fixed_spell{cnt+1,1} = i;
+                            self.SUB_DATA.fixed_spell{cnt+1,2} = double(j>length(idx)/2);
+                            self.SUB_DATA.fixed_spell{cnt+1,3} = idx(j);
+                            self.SUB_DATA.fixed_spell{cnt+1,4} = self.standard_words{idx(j)};
+                            cnt=cnt+1;
+                        end
+                    end
+
+                    % Generate Passive Spelling Order for all sessions
+                    self.SUB_DATA.combination{1,1}='session';
+                    self.SUB_DATA.combination{1,2}='condition';
+                    cnt=1;
+                    for i = 1:20
+                        for j=1:10
+                            idx = randperm(4);
+                            for k =1:length(idx)
+                                self.SUB_DATA.combination{cnt+1,1} = i;
+                                self.SUB_DATA.combination{cnt+1,2} = idx(k);
+                                cnt=cnt+1;
+                            end
+                        end
+                    end
+
+                    % Generate Stroop Trials?
+
+                    % Save file 
+                    xlswrite(self.SUB_DATA.file_name,self.SUB_DATA.article_task,'article');
+                    xlswrite(self.SUB_DATA.file_name,self.SUB_DATA.fixed_spell,'fixed_spell');
+                    xlswrite(self.SUB_DATA.file_name,self.SUB_DATA.combination,'combination');
                 end
-                
-                % Generate Stroop Trials?
-                
-                % Save file 
-                xlswrite(self.SUB_DATA.file_name,self.SUB_DATA.article_task,'article');
-                xlswrite(self.SUB_DATA.file_name,self.SUB_DATA.fixed_spell,'fixed_spell');
-                xlswrite(self.SUB_DATA.file_name,self.SUB_DATA.combination,'combination');
+
+                % Load Subject Experimental File and set paradigm
+                [self.SUB_DATA.article_task_num,~,self.SUB_DATA.article_task] = xlsread(self.SUB_DATA.file_name,'article');
+                [self.SUB_DATA.fixed_spell_num,~,self.SUB_DATA.fixed_spell] = xlsread(self.SUB_DATA.file_name,'fixed_spell');
+                [self.SUB_DATA.combination_num,~,self.SUB_DATA.combination] = xlsread(self.SUB_DATA.file_name,'combination');
             end
-            
-            % Load Subject Experimental File and set paradigm
-            [self.SUB_DATA.article_task_num,~,self.SUB_DATA.article_task] = xlsread(self.SUB_DATA.file_name,'article');
-            [self.SUB_DATA.fixed_spell_num,~,self.SUB_DATA.fixed_spell] = xlsread(self.SUB_DATA.file_name,'fixed_spell');
-            [self.SUB_DATA.combination_num,~,self.SUB_DATA.combination] = xlsread(self.SUB_DATA.file_name,'combination');
         end
         
         function initialize(self)
@@ -284,6 +308,8 @@ classdef speller < handle
                     self.classifierObj = CCA(self.numHarmonics,self.DEF_STIM_DUR,self.sourceObj.Fs,self.design.StimFreq, self.debugMode);
                 case 'CombinedCCA'
                     self.classifierObj = Combined_CCA(self.numHarmonics,self.DEF_STIM_DUR,self.sourceObj.Fs,self.design.StimFreq, self.debugMode, self.trainFileName);
+                case 'AdaptiveC3A'
+                    self.classifierObj = AdaptiveC3A(self.numHarmonics,self.DEF_STIM_DUR,self.sourceObj.Fs,self.design.StimFreq, self.debugMode, self.trainFileName, self.SUB_DATA.session_num);
                 case 'Mouse'
                     self.classifierObj = Mouse_Classifier(self.window,self.design.StimLoc);
             end
@@ -294,13 +320,19 @@ classdef speller < handle
         % TERMINATE closes all PTB windows and terminates any objects
             Screen('CloseAll');
             ShowCursor;
-            Screen('Preference', 'VisualDebuglevel', 1);    
+            Screen('Preference', 'VisualDebuglevel', 1);   
+            
             % save results
-            xlswrite(self.SUB_DATA.file_name,self.SUB_DATA.article_task,'article');
-            xlswrite(self.SUB_DATA.file_name,self.SUB_DATA.fixed_spell,'fixed_spell');
-            xlswrite(self.SUB_DATA.file_name,self.SUB_DATA.combination,'combination');
+            if(self.RunCalibration)
+                xlswrite(self.SUB_DATA.file_name,self.SUB_DATA.calibration_task,'calibration');
+            else
+                xlswrite(self.SUB_DATA.file_name,self.SUB_DATA.article_task,'article');
+                xlswrite(self.SUB_DATA.file_name,self.SUB_DATA.fixed_spell,'fixed_spell');
+                xlswrite(self.SUB_DATA.file_name,self.SUB_DATA.combination,'combination');
+            end
             
             % close out objects
+            terminate(self.classifierObj);
             try
                 terminate(self.sourceObj);
             catch
@@ -312,10 +344,38 @@ classdef speller < handle
             
         end % END terminate
         
-        function start(self)
-        %START is the main runnable that starts and runs the speller after
-        %all initialization has been completed 
+        function start_calibration(self)
+        %CALIBRATE runs the calibration sequence for building template
+        %signals for each frequency/class 
+            % Show calibration start screen and wait for user to Start
+            if(self.showStart)
+                Screen('CopyWindow', self.startCalibrationScreen, self.window);
+                Screen('Flip', self.window);
+                user_pause(self); % Pause
+            end
+            
+            % Calibration
+            for i=1:self.SUB_DATA.num_calibration_runs
+                startMsg = ['Starting run ' int2str(i) ' of ' int2str(self.SUB_DATA.num_calibration_runs) '. Press "ENTER" to begin.'];  
+                Screen(self.startCalibrationScreen,'FillRect',self.BG_COLOR);
+                DrawFormattedText(self.startCalibrationScreen,WrapString(startMsg),'center','center',[],[],[],[],2);
+                Screen('CopyWindow', self.startCalibrationScreen, self.window);
+                Screen('Flip', self.window);
+                user_pause(self); % Pause
+                copysequence = self.fullmatrix(randperm(length(self.fullmatrix)));
+                run_copyspell_trial(self,copysequence,'copyspell'); 
+                %no results during calibration, just save target sequence
+                self.SUB_DATA.calibration_task{i+1,1} = i;
+                self.SUB_DATA.calibration_task{i+1,2} = copysequence;
+            end
+            
+            % experiemnt complete, terminate
+            terminate(self); % terminate speller when done
+        end
         
+        function start_paradigm(self)
+        %START_PARADIGM runs the main speller paradigm for the daily
+        %sessions
             % Show start screen and wait for user to Start
             if(self.showStart)
                 Screen('CopyWindow', self.startScreen, self.window);
@@ -331,7 +391,7 @@ classdef speller < handle
                 == self.SUB_DATA.session_num & self.SUB_DATA.fixed_spell_num(:,2) == 0));
             words = self.SUB_DATA.fixed_spell_num(idx,3);
             for w=1:length(words)
-                run_copyspell_trial(self, self.standard_words{words(w)});
+                run_copyspell_trial(self, self.standard_words{words(w)},'copyspell2');
                 % Save Results***
                 self.SUB_DATA.fixed_spell{idx(w)+1,5} = self.fb_seq2;
             end
@@ -365,7 +425,7 @@ classdef speller < handle
                 == self.SUB_DATA.session_num & self.SUB_DATA.fixed_spell_num(:,2) == 1));
             words = self.SUB_DATA.fixed_spell_num(idx,3);
             for w=1:length(words)
-                run_copyspell_trial(self, self.standard_words{words(w)});
+                run_copyspell_trial(self, self.standard_words{words(w)},'copyspell2');
                 % Save Results***
                 self.SUB_DATA.fixed_spell{idx(w)+1,5} = self.fb_seq2;
             end
@@ -375,6 +435,18 @@ classdef speller < handle
             
             % experiemnt complete, terminate
             terminate(self); % terminate speller when done
+        end
+        
+        function start(self)
+        %START is the main runnable that starts and runs the speller after
+        %all initialization has been completed 
+        
+            % Is this a calibration session?
+            if(self.RunCalibration)
+                start_calibration(self);    % Yes; Run calibration
+            else
+                start_paradigm(self);       % NO; Run daily speller
+            end
         end
         
         % this snippit runs a passive viewing
@@ -425,8 +497,8 @@ classdef speller < handle
         end
         
         % this code snippet runs a copy spell run
-        function run_copyspell_trial(self,word2spell)
-            self.spellerMode = 'copyspell2';
+        function run_copyspell_trial(self,word2spell,mode)
+            self.spellerMode = mode;
             % spell until word is completely spelled
             self.TRIAL_CNT=1;
             self.COPY_SEQ = word2spell;
@@ -779,10 +851,24 @@ classdef speller < handle
             startMsg = ['You are about to start the daily experiment. In this session, you will copy-spell six three-letter' ...
                 ' words, passively view stimuli, and summarize three NY times articles. \n This experiment is self paced. ' ...
                 'For every pause, press "ENTER" to continue. During the free spell portions, press'...
-                ' "ESC" when finished spelling. If you are unsure about any part of the task, plase ask the experimenter for clarification. /n'...
+                ' "ESC" when finished spelling. If you are unsure about any part of the task, plase ask the experimenter for clarification. \n'...
                 ' Press "ENTER" to begin'];  
             
             DrawFormattedText(self.startScreen,WrapString(startMsg),'center','center',[],[],[],[],2);
+            
+            % ---------------------------------------------------------------------
+            % Create offscreen for start calibration screen
+            % ---------------------------------------------------------------------
+            self.startCalibrationScreen = Screen(self.window, 'OpenOffScreenWindow', self.BG_COLOR);
+            
+            Screen(self.startCalibrationScreen, 'TextColor', self.WHITE);
+            Screen(self.startCalibrationScreen, 'TextFont', self.TEXT_FONT);
+            Screen(self.startCalibrationScreen, 'TextSize', self.FONT_SIZE);
+            
+            startMsg = ['Please visually fixate on the cued stimulus (indicated by the blue square).'...
+                ' Press "ENTER" after each stimulus.'];  
+            
+            DrawFormattedText(self.startCalibrationScreen,WrapString(startMsg),'center','center',[],[],[],[],2);
             
             % ---------------------------------------------------------------------
             % Create offscreen for Ending screen
@@ -899,7 +985,9 @@ classdef speller < handle
             tmpSymbol={'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P',...
                 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', '?',...
                 'Z', 'X', 'C', 'V', 'B', 'N', 'M', ',', '.', '!',...
-                '$',':',';','(',')',' ','@','#','&','<'};
+                '$',':',';','(',')',' ','@','#','and','<'};  
+            
+            self.fullmatrix='QWERTYUIOPASDFGHJKL?ZXCVBNM,.!$:;() @#&<';
             
             % File name for audio files
             tmpNameAudio   = {'1', '2', '3', '4', '5', '6', '7', '8', '9', '0',...
@@ -931,6 +1019,9 @@ classdef speller < handle
                 fbSymbol{i} = tmpSymbol{i};
                 if(strcmp(fbSymbol{i},'space') || strcmp(fbSymbol{i},'Tweet'))
                     fbSymbol{i} = ' ';
+                end
+                if(strcmp(fbSymbol{i},'and'))
+                    fbSymbol{i}='&';
                 end
                 nameAudio{i} = tmpNameAudio{i};
             end

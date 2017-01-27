@@ -137,7 +137,7 @@ classdef speller < handle
         % Get subject info
         function getSubjectInfo(self)
             % Open Dialog box to get subject ID and Session Number
-            prompt = {'Enter Subject Initials (e.g. NRW)','Enter Session Number'};
+            prompt = {'Enter Subject Initials (e.g. NRW)','Enter Session Number (0 for calibration)'};
             dlg_title = 'SubInfo';
             num_lines = 1;
             defaultans = {'XXX','1'};
@@ -153,14 +153,15 @@ classdef speller < handle
                 num_lines = 1;
                 defaultans = {'3'};
                 answer = inputdlg(prompt,dlg_title,num_lines,defaultans);
-                self.SUB_DATA.num_calibration_runs = int2str(answer);
+                self.SUB_DATA.num_calibration_runs = str2double(answer{1});
                 self.SUB_DATA.file_name = ['data/CalibrationData/' self.SUB_DATA.sub_id '_data.csv'];
                 self.SUB_DATA.model_file_name = [];
                 self.SUB_DATA.calibration_task{1,1} = 'Run';
                 self.SUB_DATA.calibration_task{1,2} = 'Targets';
-                self.CUE_DUR = 2;
+                self.CUE_DUR = 0;
                 self.FB_DUR = 0;
                 self.DEF_STIM_DUR = 6;
+                self.showFeedback = false;
                 self.RunCalibration = true;  % run calibration sequence
                 
             else % else, this is a normal session

@@ -14,11 +14,13 @@ classdef AdaptiveC3A < SSVEP_classifier
             % if this is the first session, load base models, else load the
             % last session's models
             if(sessionNum==1)
-                self.trainTemplates = load('BaseModels');
+                self.trainTemplates = load('data/ClassifierModels/BaseModels');
                 self.filename = filename;
             elseif(sessionNum>1)
                 self.filename = filename;
                 self.trainTemplates = load(self.filename);
+                trainTemplates = self.trainTemplates;
+                save([self.filename '_' int2str(sessionNum)],'trainTemplates');
             else %this is a calibration session
                 self.debugMode = true;
             end

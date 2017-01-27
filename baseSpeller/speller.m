@@ -154,7 +154,8 @@ classdef speller < handle
                 defaultans = {'3'};
                 answer = inputdlg(prompt,dlg_title,num_lines,defaultans);
                 self.SUB_DATA.num_calibration_runs = int2str(answer);
-                self.SUB_DATA.file_name = ['data/CalibrationData/Subject_' self.SUB_DATA.sub_id '_data.csv'];
+                self.SUB_DATA.file_name = ['data/CalibrationData/' self.SUB_DATA.sub_id '_data.csv'];
+                self.SUB_DATA.model_file_name = [];
                 self.SUB_DATA.calibration_task{1,1} = 'Run';
                 self.SUB_DATA.calibration_task{1,2} = 'Targets';
                 self.CUE_DUR = 2;
@@ -163,7 +164,8 @@ classdef speller < handle
                 self.RunCalibration = true;  % run calibration sequence
                 
             else % else, this is a normal session
-                self.SUB_DATA.file_name = ['data/ExperimentData/Subject_' self.SUB_DATA.sub_id '_data.csv'];
+                self.SUB_DATA.file_name = ['data/ExperimentData/' self.SUB_DATA.sub_id '_data.csv'];
+                self.SUB_DATA.model_file_name = ['data/ClassifierModels/' self.SUB_DATA.sub_id '_models'];
                 self.RunCalibration = false;  % run daily speller paradigm
                 
                 % If this is the subjects first session, generate an
@@ -309,7 +311,7 @@ classdef speller < handle
                 case 'CombinedCCA'
                     self.classifierObj = Combined_CCA(self.numHarmonics,self.DEF_STIM_DUR,self.sourceObj.Fs,self.design.StimFreq, self.debugMode, self.trainFileName);
                 case 'AdaptiveC3A'
-                    self.classifierObj = AdaptiveC3A(self.numHarmonics,self.DEF_STIM_DUR,self.sourceObj.Fs,self.design.StimFreq, self.debugMode, self.trainFileName, self.SUB_DATA.session_num);
+                    self.classifierObj = AdaptiveC3A(self.numHarmonics,self.DEF_STIM_DUR,self.sourceObj.Fs,self.design.StimFreq, self.debugMode, self.SUB_DATA.model_file_name, self.SUB_DATA.session_num);
                 case 'Mouse'
                     self.classifierObj = Mouse_Classifier(self.window,self.design.StimLoc);
             end

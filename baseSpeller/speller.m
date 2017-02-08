@@ -55,7 +55,7 @@ classdef speller < handle
         
         % Speller Modes
         spellerMode = 'copyspell'
-        debugMode = true
+        debugMode = false
         wordPredictionMode = false
         twitterMode = false
         TTS_Mode = false
@@ -158,8 +158,8 @@ classdef speller < handle
                 self.SUB_DATA.model_file_name = [];
                 self.SUB_DATA.calibration_task{1,1} = 'Run';
                 self.SUB_DATA.calibration_task{1,2} = 'Targets';
-                self.CUE_DUR = 0;
-                self.FB_DUR = 0;
+                self.CUE_DUR = 0.0;
+                self.FB_DUR = 0.5;
                 self.DEF_STIM_DUR = 6;
                 self.showFeedback = false;
                 self.RunCalibration = true;  % run calibration sequence
@@ -508,9 +508,17 @@ classdef speller < handle
             self.fb_seq = []; self.fb_seq2 = [];
             % translate txt 2 spell 2 number array
             for xx = 1:length(self.COPY_SEQ)
-                for jj = 1:length(self.design.Symbol)
-                    if(strcmp(self.design.Symbol{jj},self.COPY_SEQ(xx)))
-                        self.Copy_Seq_Num(xx) = jj;
+                if(strcmp(self.COPY_SEQ(xx),'&'))
+                    for jj = 1:length(self.design.Symbol)
+                        if(strcmp(self.design.Symbol{jj},'and'))
+                            self.Copy_Seq_Num(xx) = jj;
+                        end
+                    end
+                else
+                    for jj = 1:length(self.design.Symbol)
+                        if(strcmp(self.design.Symbol{jj},self.COPY_SEQ(xx)))
+                            self.Copy_Seq_Num(xx) = jj;
+                        end
                     end
                 end
             end
@@ -767,9 +775,17 @@ classdef speller < handle
             self.design = exp_GenStimDesign(self,self.spellerMode, self.refreshRateHz, [self.windowRect(3), self.windowRect(4)], self.DEF_STIM_DUR, self.numTarg);
             % translate txt 2 spell 2 number array
             for xx = 1:length(self.COPY_SEQ)
-                for jj = 1:length(self.design.Symbol)
-                    if(strcmp(self.design.Symbol{jj},self.COPY_SEQ(xx)))
-                        self.Copy_Seq_Num(xx) = jj;
+                if(strcmp(self.COPY_SEQ(xx),'&'))
+                    for jj = 1:length(self.design.Symbol)
+                        if(strcmp(self.design.Symbol{jj},'and'))
+                            self.Copy_Seq_Num(xx) = jj;
+                        end
+                    end
+                else
+                    for jj = 1:length(self.design.Symbol)
+                        if(strcmp(self.design.Symbol{jj},self.COPY_SEQ(xx)))
+                            self.Copy_Seq_Num(xx) = jj;
+                        end
                     end
                 end
             end

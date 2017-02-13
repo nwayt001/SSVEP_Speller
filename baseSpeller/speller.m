@@ -97,6 +97,7 @@ classdef speller < handle
         %------------------------------------------------------------------
         % Class constructor:
         function self = speller(options)
+            rng('shuffle'); %randomize matlab seed
             if(nargin==1)
                 self.DEF_STIM_DUR = options.stimDuration;
                 self.CUE_DUR = options.CUE_DUR;

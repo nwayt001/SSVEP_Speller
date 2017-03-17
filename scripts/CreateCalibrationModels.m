@@ -5,11 +5,16 @@
 datadir = '../data/CalibrationData/';
 files = dir(datadir);
 files = files(3:end);
+for i=1:length(files)
+    isdir(i)=files(i).isdir;
+end
+files = files(isdir==0);
 num_sub = length(files);
 
 datadirEEG = '../data/EEG/';
 filesEEG = dir(datadirEEG);
 filesEEG = filesEEG(3:end);
+filesEEG = filesEEG(1:end-1);
 
 for sub = 1:num_sub
     % load in the trial labels (.csv file)
@@ -25,11 +30,13 @@ for sub = 1:num_sub
     for i=1:length(filesEEG)
         if(findstr(subID,filesEEG(i).name))
             datadirEEGfile = [datadirEEG filesEEG(i).name];
+            break;
         end
     end
     fileEEG = dir(datadirEEGfile);
     [signal, state, parm] = load_bcidat([datadirEEGfile '/' fileEEG(end).name], '-calibrated');
     Fs = parm.SamplingRate.NumericValue;
+    signal(:,1:end-1) = EEGfilter(signal(:,1:end-1),Fs,2);
     idealTrialLen = Fs*6;
     trial_idx = find(signal(1:end-1,end)==1 & signal(2:end,end)==0);
     trial_idx = trial_idx(1:120);
@@ -60,3 +67,13 @@ end
 trainTemplates = mean(Models,4);
 % save models to be used as base models for SSVEP transfer
 save(['../data/ClassifierModels/BaseModels'],'trainTemplates');
+
+% look at some signals
+figure;
+hold off
+plot(trainTemplates(:,2,4),'b');
+hold on;
+plot(trainTemplates_nofilter(:,2,4),'r');
+tmp = Models(:,2,4,3);
+hold on;
+plot(tmp,'g')

@@ -4,7 +4,7 @@ classdef speller < handle
     properties
         CUE_DUR             = 0.0;
         FB_DUR              = 1.0;
-        DEF_STIM_DUR        = 4.0;
+        DEF_STIM_DUR        = 6.0;
         WHITE               = [255, 255, 255];
         BLACK               = [  0,   0,   0];
         RED                 = [255,   0, 102];
@@ -41,7 +41,8 @@ classdef speller < handle
         Copy_Seq_Num
         channels = 1:16
         sourceType ='FT'
-        classifierType ='CCA'
+        %classifierType ='CCA'
+        classifierType='AdaptiveC3A'
         spelledLetters
         spelledTxt
         running
@@ -52,6 +53,7 @@ classdef speller < handle
         keypress_check_vector
         SUB_DATA
         data_dir
+        pixel_size = 32;
         
         % Speller Modes
         spellerMode = 'copyspell'
@@ -461,7 +463,7 @@ classdef speller < handle
         %this function runs the ny times article sequence
         function run_article_sequence(self, article_headline, article_abstract,condition)
             % setup next article
-            self.articleScreen = Screen(self.window, 'OpenOffScreenWindow', self.BG_COLOR);
+            self.articleScreen = Screen(self.window, 'OpenOffScreenWindow', self.BG_COLOR,[],self.pixel_size);
             Screen(self.articleScreen, 'TextColor', self.WHITE);
             Screen(self.articleScreen, 'TextFont', self.TEXT_FONT);
             Screen(self.articleScreen, 'TextSize', self.FONT_SIZE);
@@ -767,7 +769,7 @@ classdef speller < handle
             self.oldDebugLevel = Screen('Preference', 'VisualDebuglevel', 1);
             self.screens = Screen('Screens');
             self.screenNumber = max(self.screens);
-            [self.window, self.windowRect] = Screen('OpenWindow', self.screenNumber, self.BG_COLOR, [], [], 2);
+            [self.window, self.windowRect] = Screen('OpenWindow', self.screenNumber, self.BG_COLOR, [], self.pixel_size, 2);
             [self.centX, self.centY] = RectCenter(self.windowRect);
             self.ifi = Screen('GetFlipInterval', self.window);
             self.refreshRateHz = round(1/self.ifi);
@@ -842,7 +844,7 @@ classdef speller < handle
                     'TextFont',     self.TEXT_FONT,...
                     'TextSize',     self.FONT_SIZE);
                 
-                self.offScreen(win_i) = Screen(self.window, 'OpenOffScreenWindow', self.BG_COLOR);
+                self.offScreen(win_i) = Screen(self.window, 'OpenOffScreenWindow', self.BG_COLOR,[],self.pixel_size);
                 exp_preloadStimuli(self,'stimuli', self.offScreen(win_i), self.design, stimParam);
                 
             end % win_i
@@ -857,12 +859,12 @@ classdef speller < handle
                 'TextFont',     self.TEXT_FONT,...
                 'TextSize',     self.FONT_SIZE);
             
-            self.blankScreen = Screen(self.window, 'OpenOffScreenWindow', self.BG_COLOR);
+            self.blankScreen = Screen(self.window, 'OpenOffScreenWindow', self.BG_COLOR,[],self.pixel_size);
             exp_preloadStimuli(self,'blank', self.blankScreen, self.design, stimParam);
             % ---------------------------------------------------------------------
             % Create offscreen for start screen
             % ---------------------------------------------------------------------
-            self.startScreen = Screen(self.window, 'OpenOffScreenWindow', self.BG_COLOR);
+            self.startScreen = Screen(self.window, 'OpenOffScreenWindow', self.BG_COLOR,[],self.pixel_size);
             
             Screen(self.startScreen, 'TextColor', self.WHITE);
             Screen(self.startScreen, 'TextFont', self.TEXT_FONT);
@@ -879,7 +881,7 @@ classdef speller < handle
             % ---------------------------------------------------------------------
             % Create offscreen for start calibration screen
             % ---------------------------------------------------------------------
-            self.startCalibrationScreen = Screen(self.window, 'OpenOffScreenWindow', self.BG_COLOR);
+            self.startCalibrationScreen = Screen(self.window, 'OpenOffScreenWindow', self.BG_COLOR,[],self.pixel_size);
             
             Screen(self.startCalibrationScreen, 'TextColor', self.WHITE);
             Screen(self.startCalibrationScreen, 'TextFont', self.TEXT_FONT);
@@ -893,7 +895,7 @@ classdef speller < handle
             % ---------------------------------------------------------------------
             % Create offscreen for Ending screen
             % ---------------------------------------------------------------------
-            self.endScreen = Screen(self.window, 'OpenOffScreenWindow', self.BG_COLOR);
+            self.endScreen = Screen(self.window, 'OpenOffScreenWindow', self.BG_COLOR,[],self.pixel_size);
             
             Screen(self.endScreen, 'TextColor', self.WHITE);
             Screen(self.endScreen, 'TextFont', self.TEXT_FONT);
@@ -906,7 +908,7 @@ classdef speller < handle
             % ---------------------------------------------------------------------
             % Create offscreen for NY times article screen
             % ---------------------------------------------------------------------
-            self.articleScreen = Screen(self.window, 'OpenOffScreenWindow', self.BG_COLOR);
+            self.articleScreen = Screen(self.window, 'OpenOffScreenWindow', self.BG_COLOR,[],self.pixel_size);
             
             Screen(self.articleScreen, 'TextColor', self.WHITE);
             Screen(self.articleScreen, 'TextFont', self.TEXT_FONT);
@@ -922,7 +924,7 @@ classdef speller < handle
             % ---------------------------------------------------------------------
             % Create instruction screen for article task
             % ---------------------------------------------------------------------
-            self.articleInstructionScreen = Screen(self.window, 'OpenOffScreenWindow', self.BG_COLOR);
+            self.articleInstructionScreen = Screen(self.window, 'OpenOffScreenWindow', self.BG_COLOR,[],self.pixel_size);
             
             Screen(self.articleInstructionScreen, 'TextColor', self.WHITE);
             Screen(self.articleInstructionScreen, 'TextFont', self.TEXT_FONT);
@@ -937,7 +939,7 @@ classdef speller < handle
             % ---------------------------------------------------------------------
             % Create instruction screen for standard word, copy speller task
             % ---------------------------------------------------------------------
-            self.copySpellInstructionScreen = Screen(self.window, 'OpenOffScreenWindow', self.BG_COLOR);
+            self.copySpellInstructionScreen = Screen(self.window, 'OpenOffScreenWindow', self.BG_COLOR,[],self.pixel_size);
             
             Screen(self.copySpellInstructionScreen, 'TextColor', self.WHITE);
             Screen(self.copySpellInstructionScreen, 'TextFont', self.TEXT_FONT);
@@ -948,7 +950,7 @@ classdef speller < handle
             % ---------------------------------------------------------------------
             % Create instruction screen for passive viewing task
             % ---------------------------------------------------------------------
-            self.passiveViewInstructionScreen = Screen(self.window, 'OpenOffScreenWindow', self.BG_COLOR);
+            self.passiveViewInstructionScreen = Screen(self.window, 'OpenOffScreenWindow', self.BG_COLOR,[],self.pixel_size);
             
             Screen(self.passiveViewInstructionScreen, 'TextColor', self.WHITE);
             Screen(self.passiveViewInstructionScreen, 'TextFont', self.TEXT_FONT);

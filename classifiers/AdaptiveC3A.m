@@ -3,6 +3,7 @@ classdef AdaptiveC3A < SSVEP_classifier
         trainTemplates
         threshold = 1.15;
         alpha = 0.07;
+        filename
     end
     
     methods
@@ -77,7 +78,7 @@ classdef AdaptiveC3A < SSVEP_classifier
 
         % Adapt to trial if above threshold
         if(BvSB>=obj.threshold)
-            obj.trainTemplates(:,:,y) = ((squeeze(obj.trainTemplates(:,:,y)).*(1-obj.alpha)) + (X.*obj.alpha));
+            obj.trainTemplates(1:size(X,1),:,y) = ((squeeze(obj.trainTemplates(1:size(X,1),:,y)).*(1-obj.alpha)) + (X.*obj.alpha));
         end
         end
 

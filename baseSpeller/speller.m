@@ -140,7 +140,7 @@ classdef speller < handle
         % Get subject info
         function getSubjectInfo(self)
             % Open Dialog box to get subject ID and Session Number
-            prompt = {'Enter Subject Initials (e.g. NRW)','Enter Session Number (0 for calibration)'};
+            prompt = {'Enter Subject Identifier','Enter Session Number (0 for calibration)'};
             dlg_title = 'SubInfo';
             num_lines = 1;
             defaultans = {'XXX','1'};
@@ -989,10 +989,12 @@ classdef speller < handle
             
             % set stim frequencies to: 7Hz - 15.8Hz spaced 0.2Hz apart (45)
             % skipping 7.8, 9.4, 11, 12.6, 14.2 (40 total)            
-            stimFreqTmp = [7:0.2:7.6 8.0:0.2:9.2 9.6:0.2:10.8 11.2:0.2:12.4 12.8:0.2:14.0 14.4:0.2:15.8];
+            %stimFreqTmp = [7:0.2:7.6 8.0:0.2:9.2 9.6:0.2:10.8 11.2:0.2:12.4 12.8:0.2:14.0 14.4:0.2:15.8];
+            % randomize (randomize in groups of mid, low and high) ONLY DO THIS ONCE! and save!
+            %stimFreqTmp = [stimFreqTmp(randperm(14)) stimFreqTmp(randperm(14)+14) stimFreqTmp(randperm(12)+28)];
             
-            % randomize (randomize in groups of mid, low and high)
-            stimFreqTmp = [stimFreqTmp(randperm(14)) stimFreqTmp(randperm(14)+14) stimFreqTmp(randperm(12)+28)];
+            % pre-randomized frequencies to use in speller matrix
+            stimFreqTmp = [9.6,9.2,8.2,7,8.8,9.8,7.6,9,7.4,8.6,8.4,10,7.2,8,11.2,10.4,11.6,12.4,13,12,11.4,10.8,12.2,10.6,12.8,13.2,11.8,10.2,15.6,14,14.8,14.4,15.8,13.8,15.2,13.4,13.6,15,14.6,15.4];
             
             % convert to cell array
             for i=1:length(stimFreqTmp)

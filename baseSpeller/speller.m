@@ -41,8 +41,8 @@ classdef speller < handle
         Copy_Seq_Num
         channels = 1:16
         sourceType ='FT'
-        %classifierType ='CCA'
-        classifierType='AdaptiveC3A'
+        classifierType ='CCA'
+        %classifierType='AdaptiveC3A'
         spelledLetters
         spelledTxt
         running
@@ -57,7 +57,7 @@ classdef speller < handle
         
         % Speller Modes
         spellerMode = 'copyspell'
-        debugMode = false
+        debugMode = true
         wordPredictionMode = false
         twitterMode = false
         TTS_Mode = false
@@ -563,7 +563,7 @@ classdef speller < handle
             for win_i = 1:1:self.design.LenCode
                 Screen('FillRect', self.offScreen(win_i), self.WHITE, self.design.TxtFldLoc);
                 
-                if(strcmpi(self.spellerMode,'copyspell') || strcmpi(self.spellerMode,'articlespell'))
+                if(strcmpi(self.spellerMode,'copyspell') || strcmpi(self.spellerMode,'articlespell') || strcmpi(self.spellerMode,'copyspell2'))
                     Screen('DrawText', self.offScreen(win_i), ['>>' self.fb_seq], self.design.TxtLocX, self.design.TxtLocY+diff(self.design.TxtFldLoc([2,4]))/4, self.BLACK);
                     Screen('DrawText', self.offScreen(win_i), ['>>' self.copy_seq], self.design.TxtLocX, self.design.TxtLocY-diff(self.design.TxtFldLoc([2,4]))/4, self.BLACK);
                 else
@@ -983,7 +983,7 @@ classdef speller < handle
             for column_i = 1:1:numColumn
                 for row_i = 1:1:numRow
 %                     stimFreq{numColumn*(row_i-1)+column_i} = minFreq + freqResol*(numRow*(column_i-1)+(row_i-1));
-                    stimPhase{numColumn*(row_i-1)+column_i} = wrapTo2Pi(minPhase + phaseResol*(numRow*(column_i-1)+(row_i-1)));
+                    stimPhase{numColumn*(row_i-1)+column_i} = wrapTo2Pi(minPhase + phaseResol*(numRow*(row_i-1)+(column_i)));
                 end % row_i
             end % column_i
             
@@ -1093,20 +1093,32 @@ classdef speller < handle
                 for column_i = 1:1:numColumn
                     targ_i = numColumn*(row_i-1)+column_i;
                     fprintf('[%f, %.1fpi], ', stimFreq{targ_i}, stimPhase{targ_i}/pi);
+                    self.SUB_DATA.Frequencies{row_i,column_i} = stimFreq{targ_i};
+                    self.SUB_DATA.Phases{row_i,column_i} = stimPhase{targ_i}/pi;
                 end % row_i
                 fprintf('\n');
             end % column_i
             
             % Symbols
             fprintf('BCI-STIM: Symbols for each target are...\n');
+            symbol_vector = [];
             for row_i = 1:1:numRow
                 fprintf('BCI-STIM: ');
                 for column_i = 1:1:numColumn
                     targ_i = numColumn*(row_i-1)+column_i;
                     fprintf('"%s", ', symbol{targ_i});
+                    self.SUB_DATA.Symbols{row_i,column_i} = symbol{targ_i};
+                    symbol_vector = [symbol_vector symbol{targ_i}];
                 end % row_i
                 fprintf('\n');
             end % column_i
+            
+            % Save frequencies/phases/symbols in subject meta (csv) file
+            self.SUB_DATA.Symbols{row_i+1,1} = symbol_vector;
+            xlswrite(self.SUB_DATA.file_name,self.SUB_DATA.Frequencies,'frequencies');
+            xlswrite(self.SUB_DATA.file_name,self.SUB_DATA.Phases,'phases');
+            xlswrite(self.SUB_DATA.file_name,self.SUB_DATA.Symbols,'symbols');
+            
             
             design = struct('ModelName' ,spellerMode,...
                 'NumTarg'   ,numTarg,...

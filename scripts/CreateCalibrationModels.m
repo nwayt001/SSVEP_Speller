@@ -5,16 +5,17 @@
 datadir = '../data/CalibrationData/';
 files = dir(datadir);
 files = files(3:end);
+isdir=[];
 for i=1:length(files)
     isdir(i)=files(i).isdir;
 end
 files = files(isdir==0);
 num_sub = length(files);
 
-datadirEEG = '../data/EEG/';
+datadirEEG = '../data/CalibrationEEG/';
 filesEEG = dir(datadirEEG);
 filesEEG = filesEEG(3:end);
-filesEEG = filesEEG(1:end-1);
+%filesEEG = filesEEG(1:end-1);
 
 for sub = 1:num_sub
     % load in the trial labels (.csv file)
@@ -73,7 +74,7 @@ figure;
 hold off
 plot(trainTemplates(:,2,4),'b');
 hold on;
-plot(trainTemplates_nofilter(:,2,4),'r');
-tmp = Models(:,2,4,3);
-hold on;
-plot(tmp,'g')
+%plot(trainTemplates_nofilter(:,2,4),'r');
+%tmp = Models(:,2,4,3);
+%hold on;
+%plot(tmp,'g')

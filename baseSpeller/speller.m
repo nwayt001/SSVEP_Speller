@@ -41,8 +41,8 @@ classdef speller < handle
         Copy_Seq_Num
         channels = 1:16
         sourceType ='FT'
-        %classifierType ='CCA'
-        classifierType='AdaptiveC3A'
+        classifierType ='CCA'
+        %classifierType='AdaptiveC3A'
         spelledLetters
         spelledTxt
         running

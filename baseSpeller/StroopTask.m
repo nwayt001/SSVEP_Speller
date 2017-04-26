@@ -176,6 +176,10 @@ classdef StroopTask < handle
             self.stroop_results.press_keyCode = press_keyCode;
             self.stroop_results.press_latency_diff = press_latency_diff;
             self.stroop_results.all_stroop_trials = self.all_stroop_trials;
+            self.stroop_results.letter_keys = self.letter_keys;
+            self.stroop_results.stroop_letters = self.stroop_letters;
+            self.stroop_results.stroop_frequencies = self.stroop_frequencies;
+            self.stroop_phases = self.stroop_phases;
         end
         
         
@@ -294,7 +298,7 @@ classdef StroopTask < handle
             self.incongruent_trials = self.incongruent_trials(randperm(length(self.incongruent_trials)),:);
             
             self.all_stroop_trials = [self.congruent_trials; self.incongruent_trials];
-            self.all_stroop_trials = self.all_stroop_trials(randperm(length(self.all_stroop_trials)),:);
+            self.all_stroop_trials = self.all_stroop_trials(randperm(length(self.all_stroop_trials)),:  );
         end
         
         function exp_preloadStroopStimulus(self, trial)

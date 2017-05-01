@@ -4,6 +4,7 @@ classdef StroopTask < handle
     properties
         running       
         DEF_STIM_DUR        = 4.0;
+        STIM_PRIME_DUR      = 2.0;
         CUE_DUR             = 1.0;
         WHITE               = [255, 255, 255];
         BLACK               = [  0,   0,   0];
@@ -215,7 +216,7 @@ classdef StroopTask < handle
             self.refreshRateHz = round(1/self.ifi);
             display(['Da frequency is : ' num2str(self.refreshRateHz)]);
             % Generate Stimulus design structur
-            self.design = exp_GenStimDesign(self, self.refreshRateHz, [self.windowRect(3), self.windowRect(4)], self.DEF_STIM_DUR, self.numTarg);
+            self.design = exp_GenStimDesign(self, self.refreshRateHz, [self.windowRect(3), self.windowRect(4)], self.DEF_STIM_DUR + self.STIM_PRIME_DUR, self.numTarg);
             self.design.CentWindow = [self.centX, self.centY];
             
             
@@ -316,8 +317,10 @@ classdef StroopTask < handle
             for win_i = 1:self.design.LenCode
                 Screen(self.stimScreen(win_i), 'TextSize', self.FONT_SIZE);
                 Screen('FillRect', self.stimScreen(win_i), self.stroop_fillcolor(:,win_i,freq_idx), stim_rect);
-                Screen('FrameRect',self.stimScreen(win_i), self.stroop_fillcolor(:,win_i,freq_idx), stim_rect);                
-                Screen('DrawText',self.stimScreen(win_i),self.stroop_letters{letter_idx},stim_text_loc(1), stim_text_loc(2),self.BLACK);
+                Screen('FrameRect',self.stimScreen(win_i), self.stroop_fillcolor(:,win_i,freq_idx), stim_rect);
+                if(win_i > round(self.STIM_PRIME_DUR * self.refreshRateHz))
+                    Screen('DrawText',self.stimScreen(win_i),self.stroop_letters{letter_idx},stim_text_loc(1), stim_text_loc(2),self.BLACK);
+                end
             end
         end
         

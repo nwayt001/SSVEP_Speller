@@ -5,6 +5,8 @@ classdef speller < handle
         CUE_DUR             = 0.0;
         FB_DUR              = 1.0;
         DEF_STIM_DUR        = 6.0;
+        DEF_PASSIVE_DUR     = 4.0;
+        PASSIVE_ISI
         WHITE               = [255, 255, 255];
         BLACK               = [  0,   0,   0];
         RED                 = [255,   0, 102];
@@ -57,7 +59,7 @@ classdef speller < handle
         
         % Speller Modes
         spellerMode = 'copyspell'
-        debugMode = false
+        debugMode = false 
         wordPredictionMode = false
         twitterMode = false
         TTS_Mode = false
@@ -68,6 +70,7 @@ classdef speller < handle
         % PTB Screens
         offScreen
         blankScreen
+        blankScreen2
         startScreen
         endScreen
         articleScreen
@@ -75,13 +78,17 @@ classdef speller < handle
         copySpellInstructionScreen
         passiveViewInstructionScreen
         startCalibrationScreen
-        
+        throwAwayScreen
         % Class objects
         sourceObj
         classifierObj
         wordPredictorObj
         twitterObj
         TTS_Obj
+        
+        % VAS questionnaire
+        vas_questionnaire
+        vas_results
         
         % speller article task
         standard_words = {'PIG','CAT','OWL','ANT','BEE','FOX','CAR','VAN','MUD','NUT','BED','TEA',...
@@ -243,6 +250,12 @@ classdef speller < handle
                     % Generate Passive Spelling Order for all sessions
                     self.SUB_DATA.combination{1,1}='session';
                     self.SUB_DATA.combination{1,2}='condition';
+                    self.SUB_DATA.combination{1,3}='letters';
+                    condition{1}='CAT';
+                    condition{2}='TCA';
+                    condition{3}='DOG';
+                    condition{4}='ODG';
+                    
                     cnt=1;
                     for i = 1:20
                         for j=1:10
@@ -250,23 +263,57 @@ classdef speller < handle
                             for k =1:length(idx)
                                 self.SUB_DATA.combination{cnt+1,1} = i;
                                 self.SUB_DATA.combination{cnt+1,2} = idx(k);
+                                self.SUB_DATA.combination{cnt+1,3} = condition{idx(k)};
                                 cnt=cnt+1;
                             end
                         end
                     end
 
-                    % Generate Stroop Trials?
-
+                    % Generate sheet to hold VAS answers
+                    self.SUB_DATA.VAS{1,1} = 'session';
+                    self.SUB_DATA.VAS{1,2} = 'run';
+                    self.SUB_DATA.VAS{1,3} = 'Q1';
+                    self.SUB_DATA.VAS{1,4} = 'Q2';
+                    self.SUB_DATA.VAS{1,5} = 'Q3';
+                    self.SUB_DATA.VAS{1,6} = 'Q4';
+                    
+                    cnt=1;
+                    for i=1:20
+                        for j=1:3
+                            self.SUB_DATA.VAS{cnt+1,1} = i;
+                            self.SUB_DATA.VAS{cnt+1,2} = j;
+                            self.SUB_DATA.VAS{cnt+1,3} = -1;
+                            self.SUB_DATA.VAS{cnt+1,4} = -1;
+                            self.SUB_DATA.VAS{cnt+1,5} = -1;
+                            self.SUB_DATA.VAS{cnt+1,6} = -1;
+                            cnt=cnt+1;
+                        end
+                    end
+                    
                     % Save file 
                     xlswrite(self.SUB_DATA.file_name,self.SUB_DATA.article_task,'article');
                     xlswrite(self.SUB_DATA.file_name,self.SUB_DATA.fixed_spell,'fixed_spell');
                     xlswrite(self.SUB_DATA.file_name,self.SUB_DATA.combination,'combination');
+                    xlswrite(self.SUB_DATA.file_name,self.SUB_DATA.VAS,'questionnaire');
                 end
 
                 % Load Subject Experimental File and set paradigm
                 [self.SUB_DATA.article_task_num,~,self.SUB_DATA.article_task] = xlsread(self.SUB_DATA.file_name,'article');
                 [self.SUB_DATA.fixed_spell_num,~,self.SUB_DATA.fixed_spell] = xlsread(self.SUB_DATA.file_name,'fixed_spell');
                 [self.SUB_DATA.combination_num,~,self.SUB_DATA.combination] = xlsread(self.SUB_DATA.file_name,'combination');
+                [self.SUB_DATA.VAS_num,~,self.SUB_DATA.VAS] = xlsread(self.SUB_DATA.file_name,'questionnaire');
+                
+                % Save a backup of the file with a unique timestamp
+                datetime=datestr(now);
+                datetime=strrep(datetime,':','_'); %Replace colon with underscore
+                datetime=strrep(datetime,'-','_');%Replace minus sign with underscore
+                datetime=strrep(datetime,' ','_');%Replace space with underscore
+                uniqueName = ['data/ExperimentData/' self.SUB_DATA.sub_id '_data_' datetime '.csv'];
+                xlswrite(uniqueName,self.SUB_DATA.article_task,'article');
+                xlswrite(uniqueName,self.SUB_DATA.fixed_spell,'fixed_spell');
+                xlswrite(uniqueName,self.SUB_DATA.combination,'combination');
+                xlswrite(uniqueName,self.SUB_DATA.VAS,'questionnaire');
+                
             end
         end
         
@@ -335,6 +382,7 @@ classdef speller < handle
                 xlswrite(self.SUB_DATA.file_name,self.SUB_DATA.article_task,'article');
                 xlswrite(self.SUB_DATA.file_name,self.SUB_DATA.fixed_spell,'fixed_spell');
                 xlswrite(self.SUB_DATA.file_name,self.SUB_DATA.combination,'combination');
+                xlswrite(self.SUB_DATA.file_name,self.SUB_DATA.VAS,'questionnaire');
             end
             
             % close out objects
@@ -389,7 +437,7 @@ classdef speller < handle
                 user_pause(self); % Pause
             end
             
-             % STANDARD WORDS
+            % STANDARD WORDS
             Screen('CopyWindow', self.copySpellInstructionScreen, self.window); 
             Screen('Flip', self.window);
             user_pause(self); % Pause
@@ -402,13 +450,18 @@ classdef speller < handle
                 self.SUB_DATA.fixed_spell{idx(w)+1,5} = self.fb_seq2;
             end
             
-            % *TODO* Implement passive viewing paradigm, load and save
-            % PASSIVE VIEWING
-            Screen('CopyWindow', self.passiveViewInstructionScreen, self.window); 
-            Screen('Flip', self.window);
-            user_pause(self); % Pause
-            run_passive_viewing(self);
-            
+            % MOOD/STATE QUESTIONNAIRE
+            close_ptb(self);
+            self.vas_questionnaire = VAS_Questionnaire();
+            self.vas_questionnaire.start();
+            [self.vas_results(1),self.vas_results(2),self.vas_results(3),self.vas_results(4)] = self.vas_questionnaire.results;
+            % save results
+            self.SUB_DATA.VAS{((self.SUB_DATA.session_num-1)*3)+1+1,3} = self.vas_results(1);
+            self.SUB_DATA.VAS{((self.SUB_DATA.session_num-1)*3)+1+1,4} = self.vas_results(2);
+            self.SUB_DATA.VAS{((self.SUB_DATA.session_num-1)*3)+1+1,5} = self.vas_results(3);
+            self.SUB_DATA.VAS{((self.SUB_DATA.session_num-1)*3)+1+1,6} = self.vas_results(4);
+            open_ptb(self);
+
             % ARTICLE - FREE SPELL 
             % display instruction screen
             idx = find(self.SUB_DATA.article_task_num(:,9) == self.SUB_DATA.session_num);
@@ -418,10 +471,21 @@ classdef speller < handle
             user_pause(self); % Pause
             for article = 1:length(idx)
                 run_article_sequence(self,self.SUB_DATA.article_task{idx(article)+1,2},self.SUB_DATA.article_task{idx(article)+1,3},condition);
-                run_freespell_trial(self,self.SUB_DATA.article_task{idx(article)+1,2});
+                run_freespell_trial(self,' ');
                 % Save Results***
                 self.SUB_DATA.article_task{idx(article)+1,11} = self.fb_seq2;
             end
+            
+            % MOOD/STATE QUESTIONNAIRE
+            close_ptb(self);
+            self.vas_questionnaire.start();
+            [self.vas_results(1),self.vas_results(2),self.vas_results(3),self.vas_results(4)] = self.vas_questionnaire.results;
+            % save results
+            self.SUB_DATA.VAS{((self.SUB_DATA.session_num-1)*3)+1+2,3} = self.vas_results(1);
+            self.SUB_DATA.VAS{((self.SUB_DATA.session_num-1)*3)+1+2,4} = self.vas_results(2);
+            self.SUB_DATA.VAS{((self.SUB_DATA.session_num-1)*3)+1+2,5} = self.vas_results(3);
+            self.SUB_DATA.VAS{((self.SUB_DATA.session_num-1)*3)+1+2,6} = self.vas_results(4);
+            open_ptb(self);
             
              % STANDARD WORDS
             Screen('CopyWindow', self.copySpellInstructionScreen, self.window);
@@ -436,12 +500,37 @@ classdef speller < handle
                 self.SUB_DATA.fixed_spell{idx(w)+1,5} = self.fb_seq2;
             end
             
-            % *TODO* implement stroop task, load and saving
-            % STROOP
+            % MOOD/STATE QUESTIONNAIRE
+            close_ptb(self);
+            self.vas_questionnaire.start();
+            [self.vas_results(1),self.vas_results(2),self.vas_results(3),self.vas_results(4)] = self.vas_questionnaire.results;
+            % save results
+            self.SUB_DATA.VAS{((self.SUB_DATA.session_num-1)*3)+1+3,3} = self.vas_results(1);
+            self.SUB_DATA.VAS{((self.SUB_DATA.session_num-1)*3)+1+3,4} = self.vas_results(2);
+            self.SUB_DATA.VAS{((self.SUB_DATA.session_num-1)*3)+1+3,5} = self.vas_results(3);
+            self.SUB_DATA.VAS{((self.SUB_DATA.session_num-1)*3)+1+3,6} = self.vas_results(4);
+            open_ptb(self);
+            
+            % *TODO* Implement passive viewing paradigm, load and save
+            % PASSIVE VIEWING
+            Screen('CopyWindow', self.passiveViewInstructionScreen, self.window); 
+            Screen('Flip', self.window);
+            user_pause(self); % Pause
+            run_passive_viewing(self);
             
             % experiemnt complete, terminate
             terminate(self); % terminate speller when done
         end
+        
+        function close_ptb(~)
+            Screen('CloseAll');
+            ShowCursor;
+        end
+        
+        function open_ptb(self)
+            exp_GenPTBscreens(self);
+        end
+        
         
         function start(self)
         %START is the main runnable that starts and runs the speller after
@@ -457,7 +546,153 @@ classdef speller < handle
         
         % this snippit runs a passive viewing
         function run_passive_viewing(self)
-            % not yet implemented
+            
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            % do once
+            self.design.LenCode =  round(self.refreshRateHz * self.DEF_PASSIVE_DUR);
+            
+            
+            for win_i = 1:self.design.LenCode
+                self.offScreen(win_i) = Screen(self.window, 'OpenOffScreenWindow', self.BG_COLOR, [], self.pixel_size);
+                Screen(self.offScreen(win_i), 'TextColor', self.BLACK);
+                Screen(self.offScreen(win_i), 'TextFont', self.TEXT_FONT);
+                Screen(self.offScreen(win_i), 'TextSize', self.FONT_SIZE);
+            end
+            
+            % grab the center locations
+            for targ_i=1:3
+                self.design.passiveStimLoc{targ_i} = [...
+                    self.design.passiveCenterLoc{targ_i}(1) + self.centX - self.design.LenSide/2,...
+                    self.design.passiveCenterLoc{targ_i}(2) + self.centY - self.design.LenSide/2,...
+                    self.design.passiveCenterLoc{targ_i}(1) + self.centX + self.design.LenSide/2,...
+                    self.design.passiveCenterLoc{targ_i}(2) + self.centY + self.design.LenSide/2];
+            end
+            
+            self.blankScreen = Screen(self.window, 'OpenOffScreenWindow', self.BG_COLOR, [], self.pixel_size);
+            Screen(self.blankScreen, 'TextColor', self.BLACK);
+            Screen(self.blankScreen, 'TextFont', self.TEXT_FONT);
+            Screen(self.blankScreen, 'TextSize', self.FONT_SIZE);
+            bounds = Screen(self.window, 'TextBounds', '+');
+            stim_text_loc(1) = self.design.passiveCenterLoc{2}(1) + self.centX - bounds(RectRight)/1.5;
+            stim_text_loc(2) = self.design.passiveCenterLoc{2}(2) + self.centY - bounds(RectBottom)/1.5;
+            Screen('DrawText',self.blankScreen, '+' ,stim_text_loc(1), stim_text_loc(2) - 150 ,self.WHITE);
+            
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            
+            
+            % get stimuli to present
+            self.SUB_DATA.combination_num
+            idx = find((self.SUB_DATA.combination_num(:,1) == self.SUB_DATA.session_num));
+            
+            % run passive viewing trials
+            for i=1:length(idx)
+                % preload stimulus sequence for passive viewing
+                trial = self.SUB_DATA.combination{idx(i)+1,3};
+                
+                exp_preloadPassiveStimuli(self,trial);  
+
+                stimulate(self);                     % Stimulation
+  
+            end
+            
+            % reset stimuli to original stimulation matrix
+            self.design.LenCode =  round(self.refreshRateHz * self.DEF_STIM_DUR);
+            ResetoffscreenStimulation(self);
+        end
+        
+        % pre-load stimuli for a single passive viewing trial
+        function exp_preloadPassiveStimuli(self,trial)
+            isiStart = tic;
+            
+            stimCodeMatrix = cell2mat(self.design.FlickCode');
+            
+            % grab the locations of the 3 passive viewing letters
+            for i=1:length(trial)
+                for j=1:self.numTarg
+                    if(strcmp(trial(i),self.design.Symbol(j)))
+                        letter_idx(i) = j;
+                    end
+                end
+            end
+            
+                       
+            for win_i = 1:self.design.LenCode
+                fillColor1 = repmat(stimCodeMatrix(letter_idx(1),win_i),1,3)*255;
+                fillColor2 = repmat(stimCodeMatrix(letter_idx(2),win_i),1,3)*255;
+                fillColor3 = repmat(stimCodeMatrix(letter_idx(3),win_i),1,3)*255;
+                
+                % left square, border and text
+                Screen('FillRect', self.offScreen(win_i), fillColor1, self.design.passiveStimLoc{1});
+                Screen('FrameRect',self.offScreen(win_i), fillColor1, self.design.passiveStimLoc{1});
+                bounds = Screen(self.window, 'TextBounds', self.design.Symbol{letter_idx(1)});
+                stim_text_loc(1) = self.design.passiveCenterLoc{1}(1) + self.centX - bounds(RectRight)/1.5;
+                stim_text_loc(2) = self.design.passiveCenterLoc{1}(2) + self.centY - bounds(RectBottom)/1.5;
+                Screen('DrawText',self.offScreen(win_i), self.design.Symbol{letter_idx(1)},stim_text_loc(1), stim_text_loc(2),self.BLACK);
+                
+                % middle square, border and text
+                Screen('FillRect', self.offScreen(win_i), fillColor2, self.design.passiveStimLoc{2});
+                Screen('FrameRect',self.offScreen(win_i), fillColor2, self.design.passiveStimLoc{2});
+                bounds = Screen(self.window, 'TextBounds', self.design.Symbol{letter_idx(2)});
+                stim_text_loc(1) = self.design.passiveCenterLoc{2}(1) + self.centX - bounds(RectRight)/1.5;
+                stim_text_loc(2) = self.design.passiveCenterLoc{2}(2) + self.centY - bounds(RectBottom)/1.5;
+                Screen('DrawText',self.offScreen(win_i), self.design.Symbol{letter_idx(2)},stim_text_loc(1), stim_text_loc(2),self.BLACK);
+                
+                % right square, border and text
+                Screen('FillRect', self.offScreen(win_i), fillColor3, self.design.passiveStimLoc{3});
+                Screen('FrameRect',self.offScreen(win_i), fillColor3, self.design.passiveStimLoc{3});
+                bounds = Screen(self.window, 'TextBounds', self.design.Symbol{letter_idx(3)});
+                stim_text_loc(1) = self.design.passiveCenterLoc{3}(1) + self.centX - bounds(RectRight)/1.5;
+                stim_text_loc(2) = self.design.passiveCenterLoc{3}(2) + self.centY - bounds(RectBottom)/1.5;
+                Screen('DrawText',self.offScreen(win_i), self.design.Symbol{letter_idx(3)},stim_text_loc(1), stim_text_loc(2),self.BLACK);
+                
+                % fixation cross
+                bounds = Screen(self.window, 'TextBounds', '+');
+                stim_text_loc(1) = self.design.passiveCenterLoc{2}(1) + self.centX - bounds(RectRight)/1.5;
+                stim_text_loc(2) = self.design.passiveCenterLoc{2}(2) + self.centY - bounds(RectBottom)/1.5;
+                Screen('DrawText',self.offScreen(win_i), '+' ,stim_text_loc(1), stim_text_loc(2) - 150 ,self.WHITE);
+                
+            end
+            
+            while toc(isiStart) <= self.PASSIVE_ISI
+                [~, ~, keyCode] = KbCheck([],[],self.keypress_check_vector);
+                if keyCode(self.escKey), break; end
+            end
+        end
+        
+        % Re- Set offscreen variable for stimulation
+        function ResetoffscreenStimulation(self)
+            % -------------------------------------------------------------
+            % Set offscreen for stimulation
+            % -------------------------------------------------------------
+            fillColor = cell2mat(self.design.FlickCode');
+            self.offScreen = zeros(1, self.design.LenCode);
+            for win_i = 1:1:self.design.LenCode
+                
+                % Open off-screens
+                stimParam = struct(...
+                    'FillColor',    fillColor(:, win_i),...
+                    'FrameColor',   fillColor(:, win_i),...
+                    'TextColor',    self.BLACK,...
+                    'TextFont',     self.TEXT_FONT,...
+                    'TextSize',     self.FONT_SIZE);
+                
+                self.offScreen(win_i) = Screen(self.window, 'OpenOffScreenWindow', self.BG_COLOR,[],self.pixel_size);
+                exp_preloadStimuli(self,'stimuli', self.offScreen(win_i), self.design, stimParam);
+            
+            % -------------------------------------------------------------
+            % Set blankscreen
+            % -------------------------------------------------------------
+            % Set offscreen for gaze shift
+            stimParam = struct(...
+                'FillColor',    self.BLACK,...
+                'FrameColor',   self.WHITE,...
+                'TextColor',    self.WHITE,...
+                'TextFont',     self.TEXT_FONT,...
+                'TextSize',     self.FONT_SIZE);
+            
+            self.blankScreen = Screen(self.window, 'OpenOffScreenWindow', self.BG_COLOR,[],self.pixel_size);
+            exp_preloadStimuli(self,'blank', self.blankScreen, self.design, stimParam);
+            end % win_i
         end
         
         %this function runs the ny times article sequence
@@ -723,7 +958,16 @@ classdef speller < handle
                 else
                     Screen(self.blankScreen, 'TextSize', self.FONT_SIZE);
                 end
-                exp_visualFeedback(self, self.blankScreen, self.design, fb, self.RED, self.RED, self.BLACK, self.fb_seq,self.copy_seq);
+                
+                % Display Feedback (Depending on the color will let the
+                % experimenter know if the paradigm is running if debug
+                % mode or not. Green = debugMode, Red = normalMode).
+                if(self.debugMode)
+                    exp_visualFeedback(self, self.blankScreen, self.design, fb, self.GREEN, self.GREEN, self.BLACK, self.fb_seq,self.copy_seq);
+                else
+                    exp_visualFeedback(self, self.blankScreen, self.design, fb, self.RED, self.RED, self.BLACK, self.fb_seq,self.copy_seq);
+                end
+                
                 Screen('CopyWindow', self.blankScreen, self.window);
                 Screen('Flip', self.window);
 
@@ -930,8 +1174,8 @@ classdef speller < handle
             Screen(self.articleInstructionScreen, 'TextFont', self.TEXT_FONT);
             Screen(self.articleInstructionScreen, 'TextSize', self.FONT_SIZE);
             
-            self.article_condition_text{1}='Share this article with your Twitter followers by saying something about it';
-            self.article_condition_text{2}='Write the first few words of headline';
+            self.article_condition_text{1}='Provide an opinion about this article with your Twitter followers';
+            self.article_condition_text{2}='Write the keywords from the headline';
             
             general_instruction_text='Next, you will read three short NY times articles and perform a free spelling about the article. Press "ESC" when done spelling.';
             DrawFormattedText(self.articleInstructionScreen,WrapString(general_instruction_text),'center','center',[],[],[],[],2);
@@ -955,7 +1199,7 @@ classdef speller < handle
             Screen(self.passiveViewInstructionScreen, 'TextColor', self.WHITE);
             Screen(self.passiveViewInstructionScreen, 'TextFont', self.TEXT_FONT);
             Screen(self.passiveViewInstructionScreen, 'TextSize', self.FONT_SIZE);
-            instruction_text = 'Passive Viewing Section. Please press "ENTER" and fixate on the cross. (Not yet implemented...)';
+            instruction_text = 'Passive Viewing Section. Please fixate on the cross. Please press "ENTER"  to begin. ';
             DrawFormattedText(self.passiveViewInstructionScreen,WrapString(instruction_text),'center','center',[],[],[],[],2);
             
         end %END exp_GenPTBscreens
@@ -1086,6 +1330,15 @@ classdef speller < handle
                     end % row_i
                 end % column_i
             end
+            
+            % Create center locations for the passive viewing stimuli
+            for row_i=1:1
+                for column_i = 1:3
+                    passiveCenterLoc{column_i} = [hBlockSize*(column_i-(floor(3/2)+1)),...
+                        blockSize/2 + blockSize*(row_i-1) + blockSize/2 - (blockSize/2*(2*1+1)/2)];
+                end
+            end
+            
             % Frequencies and phases
             fprintf('BCI-STIM: Stimulation frequencies and phases are...\n');
             for row_i = 1:1:numRow
@@ -1140,6 +1393,8 @@ classdef speller < handle
                 'NumColumn' ,{numColumn},...
                 'EraseTarg' ,{eraseTarg},...
                 'EnterTarg' ,{enterTarg},...
+                'hBlockSize',{hBlockSize},...
+                'passiveCenterLoc',{passiveCenterLoc},...
                 'NameAudio' ,{nameAudio});
         end % - END exp_GenStimDesign
         

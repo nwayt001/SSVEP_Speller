@@ -3,8 +3,8 @@ classdef StroopTask < handle
 
     properties
         running       
-        DEF_STIM_DUR        = 4.0;
-        STIM_PRIME_DUR      = 2.0;
+        DEF_STIM_DUR        = 6.0;
+        STIM_PRIME_DUR      = 3.0;
         CUE_DUR             = 1.0;
         WHITE               = [255, 255, 255];
         BLACK               = [  0,   0,   0];
@@ -53,6 +53,14 @@ classdef StroopTask < handle
         incongruent_type
         incongruent_trials
         all_stroop_trials
+        allwhite_trials
+        allwhite_type
+        trial_type
+        rng_idx
+        
+        ISI_start
+        ISI_stop
+        LETTER_stop
         
         % subject info
         sub_info
@@ -105,7 +113,8 @@ classdef StroopTask < handle
             for i=1:length(self.all_stroop_trials)
                 trialStart = tic;
                 % generate the stimulus sequence for trial i(2sec)
-                exp_preloadStroopStimulus(self, self.all_stroop_trials(i,:));
+                %exp_preloadStroopStimulus(self, self.all_stroop_trials(i,:));
+                exp_preloadStroopStimulusV2(self, self.all_stroop_trials(i,:),i);
                 while toc(trialStart) <= self.CUE_DUR
                     [~, ~, keyCode] = KbCheck([],[],self.keypress_check_vector);
                     if keyCode(self.escKey)
@@ -146,6 +155,11 @@ classdef StroopTask < handle
                 % Stimulate
                 Screen('CopyWindow', self.stimScreen(win_i), self.window);
                 self.vbl = Screen('Flip', self.window, self.vbl + (0.5*self.ifi));
+                
+                if(win_i ==self.ISI_stop(trial)+1)
+                    latency_start = tic;
+                end
+                
                 % check if one of the three keys are pressed
                 [~, secs, keyCode, secDiff] = KbCheck([],[],self.keypress_check_vector);
                 if (length(unique(keyCode))>1)
@@ -157,6 +171,10 @@ classdef StroopTask < handle
                     self.stroop_results.press_latency(trial) = secs;
                     self.stroop_results.press_keyCode(trial) = find(keyCode==1,1);
                     self.stroop_results.press_latency_diff(trial) = secDiff;
+                    
+                    true_latency = toc(latency_start);
+                    self.stroop_results.true_latency(trial) = true_latency;
+                    
                     break; 
                 end
             end % win_i
@@ -180,7 +198,10 @@ classdef StroopTask < handle
             self.stroop_results.letter_keys = self.letter_keys;
             self.stroop_results.stroop_letters = self.stroop_letters;
             self.stroop_results.stroop_frequencies = self.stroop_frequencies;
-            self.stroop_phases = self.stroop_phases;
+            self.stroop_results.stroop_phases = self.stroop_phases;
+            self.stroop_results.ISI_start = self.ISI_start;
+            self.stroop_results.ISI_stop = self.ISI_stop;
+            self.LETTER_stop = self.LETTER_stop;
         end
         
         
@@ -239,6 +260,7 @@ classdef StroopTask < handle
                     end
                 end
             end
+            
             self.stroop_frequencies = self.design.StimFreq(self.stroop_idx);
             self.stroop_phases = self.design.StimPhase(self.stroop_idx);
             
@@ -280,7 +302,7 @@ classdef StroopTask < handle
             self.congruent_trials=[];
             for i=1:3
                 self.congruent_type(i,:) = [i i];
-                self.congruent_trials = [self.congruent_trials; repmat(self.congruent_type(i,:),20,1)];
+                self.congruent_trials = [self.congruent_trials; repmat(self.congruent_type(i,:),16,1)];
             end
             self.congruent_trials = self.congruent_trials(randperm(length(self.congruent_trials)),:);
             
@@ -298,9 +320,76 @@ classdef StroopTask < handle
             end
             self.incongruent_trials = self.incongruent_trials(randperm(length(self.incongruent_trials)),:);
             
-            self.all_stroop_trials = [self.congruent_trials; self.incongruent_trials];
-            self.all_stroop_trials = self.all_stroop_trials(randperm(length(self.all_stroop_trials)),:  );
+            
+            % create no flashing trials
+            self.allwhite_trials=[];
+            for i=1:3
+                self.allwhite_type(i,:) = [i 4];
+                self.allwhite_trials = [self.allwhite_trials; repmat(self.allwhite_type(i,:),16,1)];
+            end
+            self.allwhite_trials = self.allwhite_trials(randperm(length(self.allwhite_trials)),:);
+            
+            
+            self.all_stroop_trials = [self.congruent_trials; self.incongruent_trials; self.allwhite_trials];
+            
+            % add in labels for trial type (i.e.
+            self.trial_type = [ones(length(self.congruent_trials),1)*1; ones(length(self.incongruent_trials),1)*2; ones(length(self.allwhite_trials),1)*3];
+            self.rng_idx = randperm(length(self.all_stroop_trials));
+            self.all_stroop_trials = self.all_stroop_trials(self.rng_idx,:);
+            
+            
+            % create jitter onsets
+            for i=1:length(self.all_stroop_trials)
+                self.ISI_start(i) = self.STIM_PRIME_DUR * self.refreshRateHz;                
+                self.ISI_stop(i) = (self.STIM_PRIME_DUR * self.refreshRateHz) + 11 + randi(4);  % this code is not robust against refresh rates other than 60Hz!!
+                self.LETTER_stop(i) = self.ISI_stop(i) + 15;
+                % this will produce ISI durations approx between 200-250ms
+            end
+            
         end
+        
+        function exp_preloadStroopStimulusV2(self,trial,trial_number)
+            % -------------------------------------------------------------
+            % Populate all frames according to the letter and frequency
+            % -------------------------------------------------------------
+            letter_idx = trial(1);
+            freq_idx = trial(2);  
+            stim_rect = [self.centX - self.design.LenSide/2,...
+                    self.centY - self.design.LenSide/2,...
+                    self.centX + self.design.LenSide/2,...
+                    self.centY + self.design.LenSide/2];
+            bounds = Screen(self.window, 'TextBounds', self.stroop_letters{letter_idx});
+            stim_text_loc =[self.centX-bounds(RectRight)/1.5, self.centY-bounds(RectBottom)/1.5];
+            
+            for win_i = 1:self.design.LenCode
+                % always start by drawing black
+                Screen('FillRect', self.stimScreen(win_i), self.BLACK, stim_rect);
+                Screen('FrameRect',self.stimScreen(win_i), self.BLACK, stim_rect);
+                if(win_i <= self.ISI_start(trial_number))
+                    if(freq_idx == 4)
+                        Screen('FillRect', self.stimScreen(win_i), self.WHITE, stim_rect);
+                        Screen('FrameRect',self.stimScreen(win_i), self.WHITE, stim_rect);
+                    else
+                        Screen('FillRect', self.stimScreen(win_i), self.stroop_fillcolor(:,win_i,freq_idx), stim_rect);
+                        Screen('FrameRect',self.stimScreen(win_i), self.stroop_fillcolor(:,win_i,freq_idx), stim_rect);
+                    end
+                elseif(win_i>self.ISI_start(trial_number) && win_i<=self.ISI_stop(trial_number))
+                    Screen('FillRect', self.stimScreen(win_i), self.BLACK, stim_rect);
+                    Screen('FrameRect',self.stimScreen(win_i), self.BLACK, stim_rect);
+                elseif(win_i>self.ISI_stop(trial_number) && win_i<= self.LETTER_stop(trial_number))
+                    Screen('FillRect', self.stimScreen(win_i), self.BLACK, stim_rect);
+                    Screen('FrameRect',self.stimScreen(win_i), self.WHITE, stim_rect);
+                    Screen(self.stimScreen(win_i), 'TextColor', self.WHITE);
+                    Screen(self.stimScreen(win_i), 'TextFont', self.TEXT_FONT);
+                    Screen(self.stimScreen(win_i), 'TextSize', self.FONT_SIZE);
+                    Screen('DrawText',self.stimScreen(win_i),self.stroop_letters{letter_idx},stim_text_loc(1), stim_text_loc(2),self.WHITE);
+                else
+                    Screen('FillRect', self.stimScreen(win_i), self.BLACK, stim_rect);
+                    Screen('FrameRect',self.stimScreen(win_i), self.BLACK, stim_rect);
+                end
+            end
+        end
+        
         
         function exp_preloadStroopStimulus(self, trial)
             % -------------------------------------------------------------
@@ -315,11 +404,27 @@ classdef StroopTask < handle
             bounds = Screen(self.window, 'TextBounds', self.stroop_letters{letter_idx});
             stim_text_loc =[self.centX-bounds(RectRight)/1.5, self.centY-bounds(RectBottom)/1.5];
             for win_i = 1:self.design.LenCode
-                Screen(self.stimScreen(win_i), 'TextSize', self.FONT_SIZE);
-                Screen('FillRect', self.stimScreen(win_i), self.stroop_fillcolor(:,win_i,freq_idx), stim_rect);
-                Screen('FrameRect',self.stimScreen(win_i), self.stroop_fillcolor(:,win_i,freq_idx), stim_rect);
-                if(win_i > round(self.STIM_PRIME_DUR * self.refreshRateHz))
-                    Screen('DrawText',self.stimScreen(win_i),self.stroop_letters{letter_idx},stim_text_loc(1), stim_text_loc(2),self.BLACK);
+                Screen('FillRect', self.stimScreen(win_i), self.BLACK, stim_rect);
+                Screen('FrameRect',self.stimScreen(win_i), self.BLACK, stim_rect);
+                if(win_i <= round(self.STIM_PRIME_DUR * self.refreshRateHz))
+                    if(freq_idx == 4)
+                        Screen('FillRect', self.stimScreen(win_i), self.WHITE, stim_rect);
+                        Screen('FrameRect',self.stimScreen(win_i), self.WHITE, stim_rect);
+                    else
+                        Screen('FillRect', self.stimScreen(win_i), self.stroop_fillcolor(:,win_i,freq_idx), stim_rect);
+                        Screen('FrameRect',self.stimScreen(win_i), self.stroop_fillcolor(:,win_i,freq_idx), stim_rect);
+                    end
+                elseif(win_i > round(self.STIM_PRIME_DUR * self.refreshRateHz) && win_i<=round((self.STIM_PRIME_DUR +0.19 + jitter)* self.refreshRateHz))
+                    Screen('FillRect', self.stimScreen(win_i), self.BLACK, stim_rect);
+                    Screen('FrameRect',self.stimScreen(win_i), self.BLACK, stim_rect);
+                elseif(win_i > round((self.STIM_PRIME_DUR +0.19 + jitter)* self.refreshRateHz) && win_i<=round((self.STIM_PRIME_DUR + 0.19 + jitter + 0.25)* self.refreshRateHz))
+                    Screen('FillRect', self.stimScreen(win_i), self.BLACK, stim_rect);
+                    Screen('FrameRect',self.stimScreen(win_i), self.WHITE, stim_rect);
+                    Screen(self.stimScreen(win_i), 'TextColor', self.WHITE);
+                    Screen(self.stimScreen(win_i), 'TextFont', self.TEXT_FONT);
+                    Screen(self.stimScreen(win_i), 'TextSize', self.FONT_SIZE);
+                    Screen('DrawText',self.stimScreen(win_i),self.stroop_letters{letter_idx},stim_text_loc(1), stim_text_loc(2),self.WHITE);
+                else
                 end
             end
         end

@@ -70,7 +70,7 @@ classdef FT < Signal_IO
                     begsample = obj.prevSample+1;
                     data = ft_read_data(obj.ft_buffer, 'header', obj.hdr, 'begsample', begsample, 'endsample', newsamples, 'chanindx', 1:obj.hdr.nChans);
                     data = data';
-                    startIdx = find(data(2:end,end)~=obj.endEvent & data(1:end-1,end)==obj.endEvent, 1);
+                    startIdx = find(data(2:end,end)~=obj.startEvent & data(1:end-1,end)==obj.endEvent, 1);
                     
                     if(~isempty(startIdx))
                         if(size(data,1) >= (startIdx+obj.blockSize+obj.delay-1))
